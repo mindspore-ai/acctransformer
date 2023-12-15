@@ -1,0 +1,5 @@
+tests/ops/tbe/testdata/qkvs_data/1674887012329161612/q.npy filter=lfs diff=lfs merge=lfs -text
+tests/ops/tbe/testdata/qkvs_data/1674887012329161612/scale.npy filter=lfs diff=lfs merge=lfs -text
+tests/ops/tbe/testdata/qkvs_data/1674887012329161612/v.npy filter=lfs diff=lfs merge=lfs -text
+tests/ops/tbe/testdata/qkvs_data/1674887012329161612/k.npy filter=lfs diff=lfs merge=lfs -text
+tests/ops/tbe/testdata/qkvs_data/1674887012329161612/out.npy filter=lfs diff=lfs merge=lfs -text
