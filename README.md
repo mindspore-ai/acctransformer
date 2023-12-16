@@ -1,7 +1,7 @@
 # acctransformer 介绍
 
 ## 一、介绍
-**acctransformer**是一个基于MindSpore框架以及昇腾cann计算架构的transformer加速库，原生支持昇腾AI处理器NPU。<br>
+**acctransformer**是一个基于MindSpore框架以及昇腾CANN计算架构的transformer加速库，原生支持昇腾AI处理器NPU。<br>
 实现了一些对transformer模型中self-attention部分的加速算法，目前已支持:
 * **FlashAttention2**
 
@@ -16,13 +16,13 @@
 ## 二、安装使用
 ### 2.1、环境安装
 #### 2.1.1、配套环境要求
-首先需要准备包含昇腾AI处理器NPU的Linux服务器，并安装对应cann版本的NPU驱动以及固件。
+首先需要准备包含昇腾AI处理器NPU的Linux服务器，并安装对应CANN版本的NPU驱动以及固件。
 
 算法配套环境表如下：
 
 | 名称 | 配套组件 | 版本要求 |
 | --- | --- | --- |
-| FlashAttention2 | cann-toolkit<br>MindSpore<br>NPU: Ascend 910 | cann-toolkit: [7.0.RC1](https://www.hiascend.com/developer/download/community/result?module=cann&cann=7.0.RC1.beta1) <br> MindSpore: [2.2.0](https://www.mindspore.cn/versions#2.2.0)|
+| FlashAttention2 | CANN-toolkit<br>MindSpore<br>NPU: Ascend 910 | CANN-toolkit: [7.0.RC1](https://www.hiascend.com/developer/download/community/result?module=cann&cann=7.0.RC1.beta1) <br> MindSpore: [2.2.0](https://www.mindspore.cn/versions#2.2.0)|
 
 #### 2.1.2、安装指南
 
