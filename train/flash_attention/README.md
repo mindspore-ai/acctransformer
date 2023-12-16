@@ -1,6 +1,6 @@
 # FlashAttention2介绍
 ## 一、简介
-acctransformer中FlashAttention2算子基于昇腾平台和tik特性做了独特优化，相较于其他平台和框架能够有显著的性能提升。
+acctransformer中FlashAttention2算子基于昇腾达芬奇硬件和 CANN 软件架构进行开发，相较于传统的 attention 计算性能提升明显。
 
 FlashAttention以及FlashAttention2算法参考以下论文：
 
@@ -46,7 +46,9 @@ MindSpore官方网站：[链接](https://www.mindspore.cn/install) <br>
 export PYTHONPATH=/yourcodepath/acctransformer/train:$PYTHONPATH
 ```
 2. 当前仅支持Ascend 910硬件
-3. 对于输入的矩阵，目前在seq_length维度可以支持>=64K长度的输入，head_dim维度由于硬件底层限制支持<=128长度的输入。
+3. 输入Q、K、V的 shape 支持：seq_length>=64 * 1024 (64K)；由于硬件限制，head_dim<=128。
+4. 输入attention_mask的 shape 支持：(1,tiling_block_size,tiling_block_size)，tiling_block_size根据tiling策略不同变化。
+
 
 ### 2.2、FlashAttention2使用方法
 
