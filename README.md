@@ -1,35 +1,41 @@
-# MindSpeed
+# acctransformer 介绍
 
-## FlashAttention
+## 一、介绍
+**acctransformer**是一个基于MindSpore框架以及昇腾cann计算架构的transformer加速库，原生支持昇腾AI处理器NPU。<br>
+实现了一些对transformer模型中self-attention部分的加速算法，目前已支持:
+* **FlashAttention2**
 
-### 环境
-#### 一、配套环境一
-1. cann version：version=6.0.RC1
-2. mindspore version：1.9.0
-#### 二、配套环境二
-1. cann version：version=6.3.RC2
-2. mindspore version：r2.1
+如果您对MindSpore acctransformer有任何建议，请通过issue与我们联系，我们将及时处理。
 
-### FlashAttention使用方法
+算法支持列表如下：
 
-* 环境安装：
-1. for cann version：version=6.0.RC1
-```bash
-source tik_v200_env.sh`
-```
-2. for cann version：version=6.3.RC2
-```bash
-export PYTHONPATH=/home/zcs/codes/Mindspeed/accspeed:$PYTHONPATH
-```
+| 名称 | 路径 | 文档 |
+| --- | --- | --- |
+| FlashAttention2 | [FlashAttention2](train/flash_attention) | [文档](train/flash_attention/README.md) |
 
-* 单算子调试：进入目录tbe/flash_attention，运行 `python flash_attention.py`
-* ut测试：进入tbe/ut目录，运行 `pytest -v test_flash_attention.py` ; 保证测试数据完整；
-* st测试：进入tbe/st目录，运行 `pytest -v -s test_flash_attention.py` ; 测试单个函数 `test_flash_attention.py`::函数名，即可；
+## 二、安装使用
+### 2.1、环境安装
+#### 2.1.1、配套环境要求
+首先需要准备包含昇腾AI处理器NPU的Linux服务器，并安装对应cann版本的NPU驱动以及固件。
 
-### Wukong-Huahua模型训练推理
+算法配套环境表如下：
 
-* 进入model_wukong-huahua目录
-* 准备模型文件：models/wukong-huahua-ms.ckpt; 参考：`/home/ranjiewen/mind_speed/model_wukong-huahua/models`
-* 准备微调数据集：dataset/ ； `参考： /home/ranjiewen/mind_speed/model_wukong-huahua/dataset`
-* 推理脚本：`sh scripts/infer.sh`
-* 单卡训练脚本：`sh scripts/run_train.sh`
+| 名称 | 配套组件 | 版本要求 |
+| --- | --- | --- |
+| FlashAttention2 | cann-toolkit<br>MindSpore<br>NPU: Ascend 910 | cann-toolkit: [7.0.RC1](https://www.hiascend.com/developer/download/community/result?module=cann&cann=7.0.RC1.beta1) <br> MindSpore: [2.2.0](https://www.mindspore.cn/versions#2.2.0)|
+
+#### 2.1.2、安装指南
+
+昇腾官方网站：[链接](https://www.hiascend.com/zh/document) <br>
+MindSpore官方网站：[链接](https://www.mindspore.cn/install) <br>
+各算法使用方法参考算法支持列表各目录下README文档
+
+## 三、分支以及版本说明
+初始版本，后续待补充
+
+## 四、测试
+
+参考每个算法模块下指导文档。
+
+## 五、许可证
+[Apache License 2.0](LICENSE)
