@@ -1,7 +1,7 @@
 # acctransformer 介绍
 
 ## 一、介绍
-**acctransformer**是一个基于MindSpore框架以及昇腾 CANN 计算栈的transformer加速库，原生支持昇腾AI处理器NPU。<br>
+**acctransformer**是一个基于MindSpore框架以及昇腾 CANN 软件栈的transformer加速库，原生支持昇腾AI处理器NPU。<br>
 实现了一些对transformer模型中self-attention部分的加速算法，目前已支持:
 * **FlashAttention2**
 
