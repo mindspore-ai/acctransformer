@@ -18,7 +18,7 @@ from setuptools import setup
 print('WARING: begin to install flash attention.')
 setup(
    name='flash_attention',
-   version='23.12.11',
+   version='1.0.0',
    author="Huawei",
    description="Flash Attention2 operator on Huawei Ascend 910A.",
    url="https://gitee.com/mindspore/acctransformer",
