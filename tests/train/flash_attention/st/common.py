@@ -42,8 +42,8 @@ class FlashAttentionGrad(nn.Cell):
 
     def construct(self, q, k, v, attn_mask, l, o, douts, drop_mask=None):
         alibi_mask = None # 算子预留接口，nz未适配，当前不测试
-        dq, dk, dv = self.flash_attention_grad(q, k, v, attn_mask, drop_mask, alibi_mask, (o, l), douts)
-        return dq, dk, dv
+        grad = self.flash_attention_grad(q, k, v, attn_mask, drop_mask, alibi_mask, (o, l), douts)
+        return grad
 
 
 class DropGenMask(nn.Cell):
