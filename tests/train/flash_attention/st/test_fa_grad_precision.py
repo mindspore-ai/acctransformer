@@ -36,7 +36,7 @@ def test_fa_grad_with_triangle_attn_mask(q_shape, kv_shape):
 
     model = FlashAttentionGrad()
     cus_grad = model(Tensor(q), Tensor(k), Tensor(v), Tensor(att_mask), Tensor(l), Tensor(O), douts)
-    cus_dQ, cus_dK, cus_dV = cus_grad[1].asnumpy(), cus_grad[2].asnumpy(), cus_grad[3].asnumpy()
+    cus_dQ, cus_dK, cus_dV = cus_grad[0].asnumpy(), cus_grad[1].asnumpy(), cus_grad[2].asnumpy()
     np_dQ, np_dK, np_dV = np_impl_sa_grad(q, k, v, P, O, dO)
     rtol, rtol_pct_thd, atol = 0.005, 0.005, 0.005
     print(f"\n--------- shape: {q_shape}-{kv_shape} -------------")
@@ -88,7 +88,7 @@ def test_fa_fwd_with_causal_attn_mask(q_shape, kv_shape):
 
     model = FlashAttentionGrad()
     cus_grad = model(Tensor(q), Tensor(k), Tensor(v), Tensor(fa_attn_mask), Tensor(l), Tensor(O), douts)
-    cus_dQ, cus_dK, cus_dV = cus_grad[1].asnumpy(), cus_grad[2].asnumpy(), cus_grad[3].asnumpy()
+    cus_dQ, cus_dK, cus_dV = cus_grad[0].asnumpy(), cus_grad[1].asnumpy(), cus_grad[2].asnumpy()
     np_dQ, np_dK, np_dV = np_impl_sa_grad(q, k, v, P, O, dO)
 
     rtol, rtol_pct_thd, atol = 0.005, 0.005, 0.005
@@ -134,7 +134,7 @@ def test_fa_fwd_without_attn_mask(q_shape, kv_shape):
     k_seq_len = kv_shape[2]
     model = FlashAttentionGrad(next_block_num=k_seq_len)
     cus_grad = model(Tensor(q), Tensor(k), Tensor(v), None, Tensor(l), Tensor(O), douts)
-    cus_dQ, cus_dK, cus_dV = cus_grad[1].asnumpy(), cus_grad[2].asnumpy(), cus_grad[3].asnumpy()
+    cus_dQ, cus_dK, cus_dV = cus_grad[0].asnumpy(), cus_grad[1].asnumpy(), cus_grad[2].asnumpy()
     np_dQ, np_dK, np_dV = np_impl_sa_grad(q, k, v, P, O, dO)
 
     rtol, rtol_pct_thd, atol = 0.005, 0.005, 0.005
