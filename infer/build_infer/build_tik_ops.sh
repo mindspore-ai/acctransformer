@@ -1,7 +1,7 @@
 #!/bin/bash
 # -*- coding: utf-8 -*-
 
-src=${current_script_dir}/../src/ops/tik
+src=${current_script_dir}/../flash_attention/tik
 dst=${current_script_dir}/custom_project_tik
 
 function create_empty_custom_project(){
