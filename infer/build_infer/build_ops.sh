@@ -73,7 +73,6 @@ function build_ops(){
             fi
         fi
     fi
-    source ${current_script_dir}/build_ascendc_ops.sh
     source ${current_script_dir}/build_tik_ops.sh
     rm -rf ${current_script_dir}/vendors/aie_ascendc/bin
     rm -rf ${current_script_dir}/vendors/customize/bin
