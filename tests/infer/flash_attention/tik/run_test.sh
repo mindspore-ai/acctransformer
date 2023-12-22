@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-soc_version=Ascend310P3
+soc_version=${SOC_VERSION}
 
 > test.log
 

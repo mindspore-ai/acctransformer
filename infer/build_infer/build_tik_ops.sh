@@ -2,17 +2,25 @@
 # -*- coding: utf-8 -*-
 
 src=${current_script_dir}/../flash_attention/tik
-dst=${current_script_dir}/custom_project_tik
+dst=${current_script_dir}/custom_project
 
 function create_empty_custom_project(){
     cd ${current_script_dir}
     rm -rf ${dst}
-    ${msopgen} gen -i ir_demo.json -f onnx -c ai_core-ascend310p -out ${dst}
+    if [ ${SOC_VERSION} == "Ascend310P"]; then
+        ${msopgen} gen -i ir_demo.json -f onnx -c ai_core-ascend310p -out ${dst}
+        rm ${dst}/tbe/op_info_cfg/ai_core/ascend310p/*.ini
+    elif [ ${SOC_VERSION} == "Ascend910" ]; then
+        ${msopgen} gen -i ir_demo.json -f onnx -c ai_core-ascend910 -out ${dst}
+        rm ${dst}/tbe/op_info_cfg/ai_core/ascend910/*.ini
+    else
+        echo "${SOC_VERSION} not support"
+        exit 1
+    fi
     rm ${dst}/framework/onnx_plugin/*.cc
     rm ${dst}/op_proto/*.h
     rm ${dst}/op_proto/*.cc
     rm ${dst}/tbe/impl/*.py
-    rm ${dst}/tbe/op_info_cfg/ai_core/ascend310p/*.ini
 }
 
 function release_framework_onnx(){
@@ -44,11 +52,19 @@ function release_op_impl(){
 }
 
 function release_cfg(){
-    cd ${src}/tbe/op_info_cfg/ai_core/ascend310p
     local files=(
         flash_attention_tik.ini
     )
-    cp ${files[@]} ${dst}/tbe/op_info_cfg/ai_core/ascend310p
+    if [ ${SOC_VERSION} == "Ascend310P"]; then
+        cd ${src}/tbe/op_info_cfg/ai_core/ascend310p
+        cp ${files[@]} ${dst}/tbe/op_info_cfg/ai_core/ascend310p
+    elif [ ${SOC_VERSION} == "Ascend910" ]; then
+        cd ${src}/tbe/op_info_cfg/ai_core/ascend910
+        cp ${files[@]} ${dst}/tbe/op_info_cfg/ai_core/ascend910
+    else
+        echo "${SOC_VERSION} not support"
+        exit 1
+    fi
 }
 
 function revise_settings(){
@@ -60,6 +76,8 @@ function revise_settings(){
 function build_and_install(){
     cd ${dst}
     bash build.sh
+    rm -rf ${current_script_dir}/vendors
+    mkdir ${current_script_dir}/vendors
     chmod +w ${current_script_dir}/vendors
     bash ${dst}/build_out/*.run --install-path=${current_script_dir}/vendors
     chmod -w ${current_script_dir}/vendors

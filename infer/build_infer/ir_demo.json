@@ -1,38 +1,47 @@
 [
     {
-        "op": "GenSeqLen",
-        "language": "cpp",
+        "op": "FlashAttentionTik",
         "input_desc": [
             {
-                "name": "attnMask",
+                "name": "q",
                 "param_type": "required",
                 "format": [
-                        "ND"
+                        "FRACTAL_NZ"
                 ],
                 "type": [
-                        "int32"
+                        "fp16"
+                ]
+            },
+            {
+                "name": "k",
+                "param_type": "required",
+                "format": [
+                        "FRACTAL_NZ"
+                ],
+                "type": [
+                        "fp16"
+                ]
+            },
+            {
+                "name": "v",
+                "param_type": "required",
+                "format": [
+                        "FRACTAL_NZ"
+                ],
+                "type": [
+                        "fp16"
                 ]
             }
         ],
         "output_desc": [
             {
-                "name": "seqLenAlign",
+                "name": "y",
                 "param_type": "required",
                 "format": [
-                        "ND"
+                        "FRACTAL_NZ"
                 ],
                 "type": [
-                        "int32"
-                ]
-            },
-            {
-                "name": "seqLenOri",
-                "param_type": "required",
-                "format": [
-                        "ND"
-                ],
-                "type": [
-                        "int32"
+                        "fp16"
                 ]
             }
         ]
