@@ -7,7 +7,7 @@ dst=${current_script_dir}/custom_project
 function create_empty_custom_project(){
     cd ${current_script_dir}
     rm -rf ${dst}
-    if [ ${SOC_VERSION} == "Ascend310P"]; then
+    if [ ${SOC_VERSION} == "Ascend310P" ]; then
         ${msopgen} gen -i ir_demo.json -f onnx -c ai_core-ascend310p -out ${dst}
         rm ${dst}/tbe/op_info_cfg/ai_core/ascend310p/*.ini
     elif [ ${SOC_VERSION} == "Ascend910" ]; then
@@ -55,7 +55,7 @@ function release_cfg(){
     local files=(
         flash_attention_tik.ini
     )
-    if [ ${SOC_VERSION} == "Ascend310P"]; then
+    if [ ${SOC_VERSION} == "Ascend310P" ]; then
         cd ${src}/tbe/op_info_cfg/ai_core/ascend310p
         cp ${files[@]} ${dst}/tbe/op_info_cfg/ai_core/ascend310p
     elif [ ${SOC_VERSION} == "Ascend910" ]; then

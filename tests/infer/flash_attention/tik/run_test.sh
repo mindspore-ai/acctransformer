@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-soc_version=${SOC_VERSION}
+if [ ${SOC_VERSION} == "Ascend310P" ]; then
+    soc_version="Ascend310P3"
+else
+    soc_version=${SOC_VERSION}
 
 > test.log
 
