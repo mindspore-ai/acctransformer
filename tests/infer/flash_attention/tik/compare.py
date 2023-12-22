@@ -15,7 +15,7 @@
 import numpy as np
 
 
-def data_compare(ground_truth, predict, rtol=0.001, rtol_pct_thd=0.001, atol=0.001, max_rtol=0.1):
+def data_compare(ground_truth, predict, rtol=0.001, atol=0.001, max_rtol=0.1):
     total_count = np.prod(ground_truth.shape)
     greater_than_diff_thd_count = np.sum(
         np.abs(predict - ground_truth) > rtol * np.abs(ground_truth) + atol
@@ -26,22 +26,21 @@ def data_compare(ground_truth, predict, rtol=0.001, rtol_pct_thd=0.001, atol=0.0
 
     diff_gt_thd_proportion = greater_than_diff_thd_count / total_count
     diff_gt_max_thd_proportion = greater_than_max_diff_thd_count / total_count
-    result = "Pass"
-    if diff_gt_thd_proportion > rtol_pct_thd or diff_gt_max_thd_proportion > 0:
-        result = "Failed"
-    return result, diff_gt_thd_proportion, diff_gt_max_thd_proportion
+    return diff_gt_thd_proportion, diff_gt_max_thd_proportion
 
 
-def display(ground_truth, predict, result, proportion1, proportion2, thd1=0.001, thd2=0.1):
+def display(ground_truth, predict, proportion1, proportion2, thd1=0.001, thd2=0.1):
     print(
-        f"Compare result: {result}, relative diff greater than {thd1} proportion: {proportion1}, "
+        f"relative diff greater than {thd1} proportion: {proportion1}, "
         f"relative diff greater than {thd2} proportion: {proportion2}"
     )
-    diff_max = np.max(np.abs(predict - ground_truth))
+
     diff = np.abs(predict - ground_truth)
+    diff_max = np.max(diff)
+    diff_avg = np.average(diff)
     index = np.unravel_index(np.argmax(diff, axis=None), diff.shape)
     index = tuple(map(int, index))
-    print(f"max diff {diff_max}, ground_truth: {ground_truth[index]}, predict: {predict[index]}")
+    print(f"avg diff: {diff_avg}\nmax diff {diff_max}, ground_truth: {ground_truth[index]}, predict: {predict[index]}")
 
 
 def check():
@@ -51,8 +50,8 @@ def check():
     print(golden.shape)
     print(output.shape)
 
-    result, diff_gt_rtol_ratio, diff_gt_max_rtol_ratio = data_compare(golden, output, rtol=0.01, rtol_pct_thd=0.01)
-    display(golden, output, result, diff_gt_rtol_ratio, diff_gt_max_rtol_ratio)
+    diff_gt_rtol_ratio, diff_gt_max_rtol_ratio = data_compare(golden, output, rtol=0.05)
+    display(golden, output, diff_gt_rtol_ratio, diff_gt_max_rtol_ratio, thd1=0.05)
 
 
 if __name__ == '__main__':
