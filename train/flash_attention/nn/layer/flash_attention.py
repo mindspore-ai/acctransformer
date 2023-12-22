@@ -23,6 +23,7 @@ from mindspore.common.tensor import Tensor
 from mindspore.nn.cell import Cell
 
 __all__ = ['FlashAttention']
+HEAD_DIM_MAX_LIMIT = 256
 
 from flash_attention.ops.flash_attention.flash_attention_impl import get_flash_attention
 
@@ -100,6 +101,11 @@ class FlashAttention(Cell):
                  alibi=False
                  ):
         super(FlashAttention, self).__init__()
+
+        if head_dim > HEAD_DIM_MAX_LIMIT:
+            raise ValueError("head_dim too large, reduce head_dim and try again.")
+        if alibi is True:
+            raise ValueError("alibi not supported in the current version.")
 
         self.flash_attention = get_flash_attention(
             prev_block_num=prev_block_num,
