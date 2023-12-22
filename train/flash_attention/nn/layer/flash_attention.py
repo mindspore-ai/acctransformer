@@ -104,7 +104,7 @@ class FlashAttention(Cell):
 
         if head_dim > HEAD_DIM_MAX_LIMIT:
             raise ValueError("head_dim too large, reduce head_dim and try again.")
-        if alibi is True:
+        if alibi:
             raise ValueError("alibi not supported in the current version.")
 
         self.flash_attention = get_flash_attention(
