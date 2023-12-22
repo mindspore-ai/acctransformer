@@ -16,6 +16,7 @@ if [ ${SOC_VERSION} == "Ascend310P" ]; then
     soc_version="Ascend310P3"
 else
     soc_version=${SOC_VERSION}
+fi
 
 > test.log
 
