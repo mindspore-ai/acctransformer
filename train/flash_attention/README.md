@@ -56,8 +56,9 @@ from flash_attention.nn.layer.flash_attention import FlashAttention
 ```
 
 #### 输入
-1. 输入Q、K、V的 shape 支持：seq_length>=64 * 1024 (64K)；由于硬件限制，head_dim<=128。
-2. 输入attention_mask的 shape 支持：(1,tiling_block_size,tiling_block_size)，tiling_block_size根据tiling策略不同变化，默认tiling_block_size为128，即默认attention_mask的shape为(1, 128, 128)；attention_mask的内容为全1的上三角矩阵，示例如下：
+1. 输入Q、K、V的 shape 支持：seq_length>=64 * 1024 (64K)；由于硬件限制，head_dim<=256。
+2. 当前版本不支持输入alibi_mask，调用接口时请不要传入alibi参数，或者传入alibi=False。
+3. 输入attention_mask的 shape 支持：(1,tiling_block_size,tiling_block_size)，tiling_block_size根据tiling策略不同变化，默认tiling_block_size为128，即默认attention_mask的shape为(1, 128, 128)；attention_mask的内容为全1的上三角矩阵，示例如下：
 ```python
 import numpy as np
 import mindspore as ms
