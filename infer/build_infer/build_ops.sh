@@ -6,7 +6,7 @@
 set -e
 
 VERSION="1.0.0"
-pkg_name = "flash_attention_infer_${VERSION}.run"
+pkg_name="flash_attention_infer_${VERSION}.run"
 current_script_dir=$(dirname $(readlink -f $0))
 
 if [ "x${ASCEND_TOOLKIT_HOME}" != "x" ]; then
