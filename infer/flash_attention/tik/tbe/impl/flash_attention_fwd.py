@@ -2,6 +2,7 @@ import os
 import sys
 from functools import partial
 from collections import defaultdict
+import acl
 from tbe import tik
 import te.platform as tbe_platform
 from tbe.common.platform import get_soc_spec
@@ -24,6 +25,7 @@ class FlashAttentionFwd:
     def __init__(self, q, k, v, kernel_name, disable_debug=True):
         self.tik_instance = tik.Tik(disable_debug=disable_debug)
         self.core_num = get_soc_spec(tbe_platform.CORE_NUM)
+        self.soc_version = acl.get_soc_name()
         self.kernel_name = kernel_name
         self.cont_data_mv_1_bust = partial(self.tik_instance.data_move, sid=0, nburst=1,
                                            src_stride=0,
@@ -33,7 +35,7 @@ class FlashAttentionFwd:
         self.max_head_num = 64
         self.max_batch_head = 4096
         self.max_seqlen = 8192
-        self.head_dim_list = [40, 64, 80, 160]
+        self.head_dim_list = [40, 64, 80, 160]  # TODO:need test to confirm head_dim range
         self.min_batch = 1
         self.max_batch = 64
         self.valid = True
@@ -365,20 +367,23 @@ class FlashAttentionFwd:
                                                         Sij_ub[offset],
                                                         broadcast_mij_ub,
                                                         m_aligned * n0)
-        # exp
-        # self.tik_ops_utils.vec_ele_wise(self.tik_instance.vec_exp,
-        #                                 Sij_ub, Sij_ub, m_aligned * n_aligned)
-        # fast exp
-        self.tik_ops_utils.vec_and_scalar_ele_wise(self.tik_instance.vec_muls,
-                                                   Sij_ub, Sij_ub, 1 / 256.0, m_aligned * n_aligned)
-        self.tik_ops_utils.vec_and_scalar_ele_wise(self.tik_instance.vec_adds,
-                                                   Sij_ub, Sij_ub, 1.0, m_aligned * n_aligned)
-        for _ in range(8):
-            self.tik_ops_utils.vec_and_vec_ele_wise(self.tik_instance.vec_mul,
-                                                    Sij_ub,
-                                                    Sij_ub,
-                                                    Sij_ub,
-                                                    m_aligned * n_aligned)
+
+        if self.soc_version == "Ascend910A":
+            # exp
+            self.tik_ops_utils.vec_ele_wise(self.tik_instance.vec_exp,
+                                            Sij_ub, Sij_ub, m_aligned * n_aligned)
+        elif self.soc_version == "Ascend310P3":
+            # fast exp
+            self.tik_ops_utils.vec_and_scalar_ele_wise(self.tik_instance.vec_muls,
+                                                       Sij_ub, Sij_ub, 1 / 256.0, m_aligned * n_aligned)
+            self.tik_ops_utils.vec_and_scalar_ele_wise(self.tik_instance.vec_adds,
+                                                       Sij_ub, Sij_ub, 1.0, m_aligned * n_aligned)
+            for _ in range(8):
+                self.tik_ops_utils.vec_and_vec_ele_wise(self.tik_instance.vec_mul,
+                                                        Sij_ub,
+                                                        Sij_ub,
+                                                        Sij_ub,
+                                                        m_aligned * n_aligned)
 
         # cube impl rowsum
         Sij_l1_K1MK0_ed = self.tik_instance.Tensor(FP16, (n_aligned // 16, m_aligned, 16),

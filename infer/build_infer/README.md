@@ -17,7 +17,7 @@ export SOC_VERSION=Ascend910
 bash build_ops.sh
 ```
 该脚本会使用当前实际执行环境的 msopgen 工具在目录下生成 custom_project 自定义算子工程，然后将tik交付件拷贝到算子自定义工程进行构建和打包。
-打包完成后在当前目录生成**aie_ops.run**文件，即为构建好的run包。
+打包完成后在当前目录生成**flash_attention_infer_{VERSION}.run**文件，即为构建好的run包。
 
 
 ### 安装
@@ -28,8 +28,9 @@ source set_env.sh
 ```
 如需要安装至其他自定义目录，则执行以下命令：
 ```bash
+version=1.0.0 # 请根据实际情况修改版本号
 dst=/path/to/install  # 请修改'/path/to/install'为想要安装的路径
-bash aie_ops.run --extract=${dst}
+bash flash_attention_infer_${VERSION}.run --extract=${dst}
 export ASCEND_CUSTOM_OPP_PATH=${dst}/vendors/customize:$ASCEND_CUSTOM_OPP_PATH
 ```
 
