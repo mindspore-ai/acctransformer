@@ -1,0 +1,49 @@
+[
+    {
+        "op": "FlashAttentionTik",
+        "input_desc": [
+            {
+                "name": "q",
+                "param_type": "required",
+                "format": [
+                        "FRACTAL_NZ"
+                ],
+                "type": [
+                        "fp16"
+                ]
+            },
+            {
+                "name": "k",
+                "param_type": "required",
+                "format": [
+                        "FRACTAL_NZ"
+                ],
+                "type": [
+                        "fp16"
+                ]
+            },
+            {
+                "name": "v",
+                "param_type": "required",
+                "format": [
+                        "FRACTAL_NZ"
+                ],
+                "type": [
+                        "fp16"
+                ]
+            }
+        ],
+        "output_desc": [
+            {
+                "name": "y",
+                "param_type": "required",
+                "format": [
+                        "FRACTAL_NZ"
+                ],
+                "type": [
+                        "fp16"
+                ]
+            }
+        ]
+    }
+]
