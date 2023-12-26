@@ -368,11 +368,11 @@ class FlashAttentionFwd:
                                                         broadcast_mij_ub,
                                                         m_aligned * n0)
 
-        if self.soc_version == "Ascend910A":
+        if self.soc_version[:9] == "Ascend910":
             # exp
             self.tik_ops_utils.vec_ele_wise(self.tik_instance.vec_exp,
                                             Sij_ub, Sij_ub, m_aligned * n_aligned)
-        elif self.soc_version == "Ascend310P3":
+        elif self.soc_version[:9] == "Ascend310":
             # fast exp
             self.tik_ops_utils.vec_and_scalar_ele_wise(self.tik_instance.vec_muls,
                                                        Sij_ub, Sij_ub, 1 / 256.0, m_aligned * n_aligned)
@@ -384,6 +384,8 @@ class FlashAttentionFwd:
                                                         Sij_ub,
                                                         Sij_ub,
                                                         m_aligned * n_aligned)
+        else:
+            raise RuntimeError(f"soc version: {self.soc_version} not supported")
 
         # cube impl rowsum
         Sij_l1_K1MK0_ed = self.tik_instance.Tensor(FP16, (n_aligned // 16, m_aligned, 16),
