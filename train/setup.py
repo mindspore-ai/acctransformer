@@ -1,4 +1,4 @@
-# Copyright 2023 Huawei Technologies Co., Ltd
+# Copyright 2024 Huawei Technologies Co., Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,17 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
+"""
+Setup package.
+"""
 from setuptools import find_packages
 from setuptools import setup
 
-print('WARING: begin to install flash attention.')
+print('WARING: begin to install acctransformer.')
 setup(
-   name='flash_attention',
-   version='1.0.0',
-   author="Huawei",
-   description="Flash Attention2 operator on Huawei Ascend 910A.",
-   url="https://gitee.com/mindspore/acctransformer",
-   license="Apache License, Version 2.0",
-   packages=find_packages(where='.'),
-   zip_safe=False
+    name='acctransformer',
+    version='1.0.0',
+    author="Huawei",
+    description="acctransformer training tik.",
+    url="https://gitee.com/mindspore/acctransformer",
+    license="Apache License, Version 2.0",
+    packages=find_packages(where='.'),
+    zip_safe=False
 )

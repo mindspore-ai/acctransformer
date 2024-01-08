@@ -1,5 +1,7 @@
 # FlashAttention2介绍
+
 ## 一、简介
+
 acctransformer中FlashAttention2算子基于昇腾达芬奇硬件和 CANN 软件栈进行开发，相较于传统的 attention 计算性能提升明显。
 
 FlashAttention以及FlashAttention2算法参考以下论文：
@@ -14,10 +16,12 @@ Tri Dao
 
 Paper: https://tridao.me/publications/flash2/flash2.pdf
 
-
 ## 二、安装使用
+
 ### 2.1、环境安装
+
 #### 2.1.1、配套环境要求
+
 MindSpore: [2.2.0](https://www.mindspore.cn/versions#2.2.0) <br>
 MindSpore官方网站：[链接](https://www.mindspore.cn/install) <br>
 
@@ -26,61 +30,65 @@ CANN配套软件包版本以及安装参考MindSpore安装文档内教程。
 #### 2.1.2、安装
 
 安装FlashAttention2：
+
 1. 直接克隆源码使用，使用源码方式调用时设置PYTHONPATH
+
 ```bash
 export PYTHONPATH=/yourcodepath/acctransformer/train:$PYTHONPATH
 ```
+
 2. 安装whl包使用
+
 ```bash
    cd train
    python setup.py install
 ```
+
 或者
+
 ```bash
    cd train
    bash build.sh
-   pip install dist/flash_attention-23.12.11-py3-none-any.whl
+   pip install dist/acctransformer-1.0.0-py3-none-any.whl
 ```
 
 #### 2.1.3、注意事项
-1. 当前仅支持Ascend 910硬件
 
+1. 当前仅支持Ascend 910硬件
 
 ### 2.2、FlashAttention2使用方法
 
 #### 使用接口
+
 ```train/flash_attention/nn/layer/flash_attention.py```
 
 ```python
+
 from flash_attention.nn.layer.flash_attention import FlashAttention
+
 ```
 
 #### 输入
+
 1. 输入Q、K、V的 shape 支持：seq_length>=64 * 1024 (64K)；由于硬件限制，head_dim<=256。
 2. 当前版本不支持输入alibi_mask，调用接口时请不要传入alibi参数，或者传入alibi=False。
 3. 输入attention_mask的 shape 支持：(1,tiling_block_size,tiling_block_size)，tiling_block_size根据tiling策略不同变化，默认tiling_block_size为128，即默认attention_mask的shape为(1, 128, 128)；attention_mask的内容为全1的上三角矩阵，示例如下：
+
 ```python
+
 import numpy as np
 import mindspore as ms
 from mindspore import Tensor
 
 attention_mask = np.triu(np.ones((1, 128, 128), dtype=np.float16), k=1)
 attention_mask = Tensor(attention_mask, dtype=ms.float16)
-print(attention_mask)
 
-
-[[[0. 1. 1. ... 1. 1. 1.]
-  [0. 0. 1. ... 1. 1. 1.]
-  [0. 0. 0. ... 1. 1. 1.]
-  ...
-  [0. 0. 0. ... 0. 1. 1.]
-  [0. 0. 0. ... 0. 0. 1.]
-  [0. 0. 0. ... 0. 0. 0.]]]
 ```
 
-
 **接口简介**
+
 ```python
+
 class FlashAttention(Cell):
     """Flash Attention Layer.
 
@@ -141,11 +149,15 @@ class FlashAttention(Cell):
         >>> print(output.shape)
         (2, 16, 4096, 128)
     """
+
 ```
+
 ## 三、分支以及版本说明
+
 初始版本，后续待补充
 
 ## 四、性能比较
+
 初始版本，后续待补充
 
 ## 五、测试
