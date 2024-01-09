@@ -9,7 +9,7 @@ from mindspore import nn
 from mindspore import ops
 from mindspore import dtype as mstype
 
-from flash_attention.ops.flash_attention.flash_attention_impl import get_flash_attention, get_flash_attention_grad
+from acctransformer.flash_attention.ops.flash_attention.flash_attention_impl import get_flash_attention, get_flash_attention_grad
 
 
 def set_env():

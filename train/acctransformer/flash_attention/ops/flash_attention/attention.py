@@ -22,17 +22,17 @@ import te.platform as tbe_platform
 from tbe import tik
 from tbe.common.platform import get_soc_spec
 
-from flash_attention.ops.flash_attention.constants import FP16
-from flash_attention.ops.flash_attention.constants import FP32
-from flash_attention.ops.flash_attention.constants import GM
-from flash_attention.ops.flash_attention.constants import HARDWARE_MAX_STRIDE_LMT
-from flash_attention.ops.flash_attention.constants import MASK_FILL_VALUE
-from flash_attention.ops.flash_attention.constants import UB
-from flash_attention.ops.flash_attention.constants import TILING_BLOCK_SIZE
-from flash_attention.ops.flash_attention.tik_ops_utils import TikOpsUtils
-from flash_attention.ops.flash_attention.tiling_strategy.sparse_tiling import SparseTiling
-from flash_attention.ops.flash_attention.tiling_strategy.strategy import TilingPara
-from flash_attention.ops.flash_attention.tiling_strategy.strategy import TilingStrategy
+from acctransformer.flash_attention.ops.flash_attention.constants import FP16
+from acctransformer.flash_attention.ops.flash_attention.constants import FP32
+from acctransformer.flash_attention.ops.flash_attention.constants import GM
+from acctransformer.flash_attention.ops.flash_attention.constants import HARDWARE_MAX_STRIDE_LMT
+from acctransformer.flash_attention.ops.flash_attention.constants import MASK_FILL_VALUE
+from acctransformer.flash_attention.ops.flash_attention.constants import UB
+from acctransformer.flash_attention.ops.flash_attention.constants import TILING_BLOCK_SIZE
+from acctransformer.flash_attention.ops.flash_attention.tik_ops_utils import TikOpsUtils
+from acctransformer.flash_attention.ops.flash_attention.tiling_strategy.sparse_tiling import SparseTiling
+from acctransformer.flash_attention.ops.flash_attention.tiling_strategy.strategy import TilingPara
+from acctransformer.flash_attention.ops.flash_attention.tiling_strategy.strategy import TilingStrategy
 
 
 class FlashAttention(metaclass=ABCMeta):

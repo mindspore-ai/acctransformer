@@ -23,8 +23,7 @@ def test_fa_shard(q_shape, kv_shape):
     # sequence_mask
     batch_size, q_seq_len, k_seq_len = q.shape[0], q.shape[2], k.shape[2]
     att_mask = np.triu(np.ones(shape=(1, q_seq_len, k_seq_len), dtype=np.float16), k=1)
-    d = q.shape[-1]
-    model = FlashAttention(d)
+    model = FlashAttention()
 
     # test accuracy
     output = model(Tensor(q), Tensor(k), Tensor(v), Tensor(att_mask)).asnumpy()
@@ -56,8 +55,7 @@ def test_fa_grad_shard(q_shape, kv_shape):
     batch_size, q_seq_len, k_seq_len = q.shape[0], q.shape[2], k.shape[2]
     att_mask = np.triu(np.ones(shape=(1, q_seq_len, k_seq_len), dtype=np.float16), k=1)
 
-    d = q.shape[-1]
-    model = FlashAttention(d)
+    model = FlashAttention()
 
     sens = np.random.random(q_shape).astype("float16")
     grad = ops.GradOperation(sens_param=True, get_all=True)
@@ -99,8 +97,7 @@ def test_fa_grad_stability(q_shape, kv_shape):
     batch_size, q_seq_len, k_seq_len = q.shape[0], q.shape[2], k.shape[2]
     att_mask = np.triu(np.ones(shape=(1, q_seq_len, k_seq_len), dtype=np.float16), k=1)
 
-    d = q.shape[-1]
-    model = FlashAttention(d)
+    model = FlashAttention()
 
     sens = np.random.random(q_shape).astype("float16")
     grad = ops.GradOperation(sens_param=True, get_all=True)

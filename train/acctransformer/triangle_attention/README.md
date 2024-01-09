@@ -63,7 +63,7 @@ attention_mask = Tensor(np.triu(np.ones((batch_size, seq_length, seq_length), dt
 
 #### 使用接口
 
-```train/triangle_attention/triangle_attention.py```
+```train/acctransformer/triangle_attention/triangle_attention.py```
 
 **接口简介**
 
@@ -109,7 +109,7 @@ class TriangleAttention(nn.Cell):
         >>> import numpy as np
         >>> from mindspore import Tensor
         >>> from mindspore import dtype as mstype
-        >>> from train.triangle_attention.triangle_attention import TriangleAttention
+        >>> from acctransformer.triangle_attention.triangle_attention import TriangleAttention
         >>> model = TriangleAttention(block_size=1024)
         >>> query = Tensor(np.ones((2, 16, 4096, 128)), mstype.float16)
         >>> key = Tensor(np.ones((2, 16, 4096, 128)), mstype.float16)

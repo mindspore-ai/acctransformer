@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-from flash_attention.ops.flash_attention.tiling_strategy.strategy import TilingPara
-from flash_attention.ops.flash_attention.tiling_strategy.strategy import TilingStrategy
+from acctransformer.flash_attention.ops.flash_attention.tiling_strategy.strategy import TilingPara
+from acctransformer.flash_attention.ops.flash_attention.tiling_strategy.strategy import TilingStrategy
 
 
 class SparseTiling(TilingStrategy):
