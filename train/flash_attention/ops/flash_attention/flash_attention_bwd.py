@@ -108,7 +108,7 @@ class FlashAttentionBwd(FlashAttention):
             # broadcast
             broadcast_li_ub = self.tik_instance.Tensor(FP32, (1, m_aligned, self.N0), scope=UB, name="broadcast_li_ub")
             src_scalar = self.tik_instance.Scalar(FP32, name="src_scalar")
-            with self.tik_instance.for_range(0, m) as idx:
+            for idx in range(0, m):
                 src_scalar.set_as(li_ub[idx])
                 self.tik_instance.h_duplicate(broadcast_li_ub[0, idx, :], src_scalar)
 

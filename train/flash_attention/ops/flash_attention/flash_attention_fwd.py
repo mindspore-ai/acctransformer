@@ -65,7 +65,7 @@ class FlashAttentionFwd(FlashAttention):
             # TODO: 二分
             mn0_block_max = self.tik_instance.Tensor(FP16, (1, m, n0), name="mn0_block_max", scope=UB)
             self.cont_data_mv_1_bust(dst=mn0_block_max, src=Sij_ub_zN, burst=m)  # 用第一个(m, n0)始化，少一次duplicate和max
-            with self.tik_instance.for_range(1, n1) as idx:
+            for idx in range(1, n1):
                 self.tik_instance.h_max(mn0_block_max, mn0_block_max, Sij_ub_zN[idx, :, :])
 
             # reduce_max
@@ -195,13 +195,13 @@ class FlashAttentionFwd(FlashAttention):
                 broadcast_scale_ub = self.tik_instance.Tensor(FP32, (1, m, self.N0), scope=UB,
                                                               name="broadcast_scale_ub")
                 src_scalar = self.tik_instance.Scalar(FP32, name="src_scalar")
-                with self.tik_instance.for_range(0, m) as idx:
+                for idx in range(0, m):
                     src_scalar.set_as(update_scale_ub[idx])
                     self.tik_instance.h_duplicate(broadcast_scale_ub[0, idx, :], src_scalar)
 
                 single_loop_size = 8 # prevent ub overflow
                 loop_times, tail_num = divmod(self.N1, single_loop_size)
-                with self.tik_instance.for_range(0, loop_times) as idx:
+                for idx in range(0, loop_times):
                     # double buffer
                     with self.tik_instance.for_range(0, 2, thread_num=2) as t_idx:
                         single_thread_size = single_loop_size // 2
@@ -270,12 +270,12 @@ class FlashAttentionFwd(FlashAttention):
         with self.tik_instance.new_stmt_scope(disable_sync=False):
             broadcast_li_rec_ub = self.tik_instance.Tensor(FP32, (1, m, self.N0), scope=UB, name="broadcast_li_rec_ub")
             src_scalar = self.tik_instance.Scalar(FP32, name="src_scalar")
-            with self.tik_instance.for_range(0, m) as idx:
+            for idx in range(0, m):
                 src_scalar.set_as(li_rec_ub[idx])
                 self.tik_instance.h_duplicate(broadcast_li_rec_ub[0, idx, :], src_scalar)
             single_loop_size = 12  # prevent ub overflow
             loop_times, tail_num = divmod(self.N1, single_loop_size)
-            with self.tik_instance.for_range(0, loop_times) as idx:
+            for idx in range(0, loop_times):
                 # double buffer
                 with self.tik_instance.for_range(0, 2, thread_num=2) as t_idx:
                     single_thread_size = single_loop_size // 2
