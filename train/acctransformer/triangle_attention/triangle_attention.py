@@ -65,7 +65,7 @@ class TriangleAttention(nn.Cell):
         >>> import numpy as np
         >>> from mindspore import Tensor
         >>> from mindspore import dtype as mstype
-        >>> from triangle_attention.triangle_attention import TriangleAttention
+        >>> from acctransformer.triangle_attention.triangle_attention import TriangleAttention
         >>> model = TriangleAttention(block_size=1024)
         >>> query = Tensor(np.ones((2, 16, 4096, 128)), mstype.float16)
         >>> key = Tensor(np.ones((2, 16, 4096, 128)), mstype.float16)

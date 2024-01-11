@@ -60,11 +60,11 @@ export PYTHONPATH=/yourcodepath/acctransformer/train:$PYTHONPATH
 
 #### 使用接口
 
-```train/flash_attention/nn/layer/flash_attention.py```
+```train/acctransformer/flash_attention/nn/layer/flash_attention.py```
 
 ```python
 
-from flash_attention.nn.layer.flash_attention import FlashAttention
+from acctransformer.flash_attention.nn.layer.flash_attention import FlashAttention
 
 ```
 
@@ -72,7 +72,9 @@ from flash_attention.nn.layer.flash_attention import FlashAttention
 
 1. 输入Q、K、V的 shape 支持：seq_length>=64 * 1024 (64K)；由于硬件限制，head_dim<=256。
 2. 当前版本不支持输入alibi_mask，调用接口时请不要传入alibi参数，或者传入alibi=False。
-3. 输入attention_mask的 shape 支持：(1,tiling_block_size,tiling_block_size)，tiling_block_size根据tiling策略不同变化，默认tiling_block_size为128，即默认attention_mask的shape为(1, 128, 128)；attention_mask的内容为全1的上三角矩阵，示例如下：
+3. 输入attention_mask的 shape 支持两种shape,attention_mask的内容为全1的上三角矩阵：<br>
+
+- **(1,tiling_block_size,tiling_block_size)**，tiling_block_size根据tiling策略不同变化，默认tiling_block_size为128，即默认attention_mask的shape为(1, 128, 128)。示例如下：
 
 ```python
 
@@ -81,6 +83,34 @@ import mindspore as ms
 from mindspore import Tensor
 
 attention_mask = np.triu(np.ones((1, 128, 128), dtype=np.float16), k=1)
+attention_mask = Tensor(attention_mask, dtype=ms.float16)
+
+```
+
+**注意：输入shape为(1,tiling_block_size,tiling_block_size)的attention_mask时，在实例化FlashAttention layer时，需要设置have_attention_mask_batch参数为False。**
+
+```python
+
+from acctransformer.flash_attention.nn.layer.flash_attention import FlashAttention
+model = FlashAttention(head_dim=128,
+                       dropout_rate=0.1,
+                       prev_block_num=7,
+                       next_block_num=0,
+                       have_attention_mask_batch=False
+                       )
+
+```
+
+- **(batch_size, q_seq_length, k_seq_length)**，示例如下：
+
+```python
+
+import numpy as np
+import mindspore as ms
+from mindspore import Tensor
+
+batch_size, q_seq_len, k_seq_len = q.shape[0], q.shape[2], k.shape[2]
+attention_mask = np.triu(np.ones((batch_size, q_seq_len, k_seq_len), dtype=np.float16), k=1)
 attention_mask = Tensor(attention_mask, dtype=ms.float16)
 
 ```
@@ -134,7 +164,7 @@ class FlashAttention(Cell):
     Examples:
         >>> import numpy as np
         >>> from mindspore import dtype as mstype
-        >>> from accspeed.nn.layer.flash_attention import FlashAttention
+        >>> from acctransformer.flash_attention.nn.layer.flash_attention import FlashAttention
         >>> from mindspore import Tensor
         >>> model = FlashAttention(head_dim=128,
         ...                        dropout_rate=0.1,
@@ -162,7 +192,7 @@ class FlashAttention(Cell):
 
 ## 五、测试
 
-* ut测试：进入tests/train/flash_attention/ut目录
-* st测试：进入tests/train/flash_attention/st目录
+- ut测试：进入tests/train/flash_attention/ut目录
+- st测试：进入tests/train/flash_attention/st目录
 
 全量测试运行 `pytest -sv .` ; 测试单个文件或函数用例`pytest -sv test_XXX.py::test_func_name`即可

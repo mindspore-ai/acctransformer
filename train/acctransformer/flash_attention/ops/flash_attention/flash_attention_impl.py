@@ -22,8 +22,8 @@ from mindspore.ops import DataType
 from mindspore.ops import TBERegOp
 from mindspore.ops.composite.multitype_ops.zeros_like_impl import zeros_like
 
-from flash_attention.ops.flash_attention.flash_attention_bwd import flash_attention_grad
-from flash_attention.ops.flash_attention.flash_attention_fwd import flash_attention
+from acctransformer.flash_attention.ops.flash_attention.flash_attention_bwd import flash_attention_grad
+from acctransformer.flash_attention.ops.flash_attention.flash_attention_fwd import flash_attention
 
 KERNEL_NAME = "flash_attention"
 

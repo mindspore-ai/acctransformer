@@ -19,7 +19,7 @@ import mindspore.ops as P
 from mindspore import Tensor
 from mindspore import dtype as mstype
 
-from triangle_attention.triangle_attention import TriangleAttention
+from acctransformer.triangle_attention.triangle_attention import TriangleAttention
 
 
 class SelfAttention(nn.Cell):

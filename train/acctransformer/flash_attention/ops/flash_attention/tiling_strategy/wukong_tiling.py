@@ -13,8 +13,8 @@
 # limitations under the License.
 # ============================================================================
 """wukong tiling"""
-from flash_attention.ops.flash_attention.tiling_strategy.strategy import TilingPara
-from flash_attention.ops.flash_attention.tiling_strategy.strategy import TilingStrategy
+from acctransformer.flash_attention.ops.flash_attention.tiling_strategy.strategy import TilingPara
+from acctransformer.flash_attention.ops.flash_attention.tiling_strategy.strategy import TilingStrategy
 
 
 class WukongTiling(TilingStrategy):

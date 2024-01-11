@@ -17,13 +17,13 @@ from functools import partial
 
 from tbe import tik
 
-from flash_attention.ops.flash_attention.constants import DTYPE_SIZE
-from flash_attention.ops.flash_attention.constants import FP16
-from flash_attention.ops.flash_attention.constants import FP32
-from flash_attention.ops.flash_attention.constants import L0A
-from flash_attention.ops.flash_attention.constants import L0B
-from flash_attention.ops.flash_attention.constants import L0C
-from flash_attention.ops.flash_attention.constants import UB
+from acctransformer.flash_attention.ops.flash_attention.constants import DTYPE_SIZE
+from acctransformer.flash_attention.ops.flash_attention.constants import FP16
+from acctransformer.flash_attention.ops.flash_attention.constants import FP32
+from acctransformer.flash_attention.ops.flash_attention.constants import L0A
+from acctransformer.flash_attention.ops.flash_attention.constants import L0B
+from acctransformer.flash_attention.ops.flash_attention.constants import L0C
+from acctransformer.flash_attention.ops.flash_attention.constants import UB
 
 
 class TikOpsUtils:

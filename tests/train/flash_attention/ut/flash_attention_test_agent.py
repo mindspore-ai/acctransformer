@@ -7,7 +7,7 @@ from abc import abstractmethod
 import numpy as np
 from tbe.common.platform import set_current_compile_soc_info
 
-from flash_attention.ops.flash_attention.tiling_strategy.sparse_tiling import SparseTiling
+from acctransformer.flash_attention.ops.flash_attention.tiling_strategy.sparse_tiling import SparseTiling
 
 if os.path.exists("./rank_0"):
     shutil.rmtree("./rank_0", ignore_errors=True)

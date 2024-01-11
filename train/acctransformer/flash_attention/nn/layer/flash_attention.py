@@ -25,7 +25,7 @@ from mindspore.nn.cell import Cell
 __all__ = ['FlashAttention']
 HEAD_DIM_MAX_LIMIT = 256
 
-from flash_attention.ops.flash_attention.flash_attention_impl import get_flash_attention
+from acctransformer.flash_attention.ops.flash_attention.flash_attention_impl import get_flash_attention
 
 
 class FlashAttention(Cell):
@@ -73,7 +73,7 @@ class FlashAttention(Cell):
     Examples:
         >>> import numpy as np
         >>> from mindspore import dtype as mstype
-        >>> from accspeed.nn.layer.flash_attention import FlashAttention
+        >>> from acctransformer.flash_attention.nn.layer.flash_attention import FlashAttention
         >>> from mindspore import Tensor
         >>> model = FlashAttention(head_dim=128,
         ...                        dropout_rate=0.1,
@@ -83,7 +83,7 @@ class FlashAttention(Cell):
         >>> query = Tensor(np.ones((2, 16, 4096, 128)), mstype.float16)
         >>> key = Tensor(np.ones((2, 16, 4096, 128)), mstype.float16)
         >>> value = Tensor(np.ones((2, 16, 4096, 128)), mstype.float16)
-        >>> attention_mask = Tensor(np.ones((2, 4096, 4096)), mstype.float16)
+        >>> attention_mask = Tensor(np.triu(np.ones((1, 128, 128)), k=1), mstype.float16)
         >>> output = model(query, key, value, attention_mask)
         >>> print(output.shape)
         (2, 16, 4096, 128)
