@@ -9,7 +9,9 @@ from mindspore import nn
 from mindspore import ops
 from mindspore import dtype as mstype
 
-from acctransformer.flash_attention.ops.flash_attention.flash_attention_impl import get_flash_attention, get_flash_attention_grad
+from acctransformer.flash_attention.ops.flash_attention.flash_attention_impl import get_flash_attention
+from acctransformer.flash_attention.ops.flash_attention.flash_attention_impl import get_flash_attention_grad
+from acctransformer.triangle_attention.triangle_attention import TriangleAttention
 
 
 def set_env():
@@ -25,9 +27,48 @@ def set_env():
 
 
 class FlashAttention(nn.Cell):
-    def __init__(self, next_block_num=0):
+    def __init__(self, next_block_num=0, have_attention_mask_batch=True):
         super(FlashAttention, self).__init__()
+        self.have_attention_mask_batch = have_attention_mask_batch
         self.flash_attention = get_flash_attention(next_block_num=next_block_num)
+
+    def shard(self, in_strategy=None, out_strategy=None):
+        """Distributed configuration of FlashAttention
+        :param in_strategy: Describe the split strategy of operator input. Default: None.
+        :param out_strategy: Describe the split strategy of operator output, it is only for certain operators,
+                                  such as MatMul. Default: None.
+        :return:
+        """
+        if in_strategy is None:
+            # default: dp=1, mp=1, construct inputs only contain q, k, v
+            in_strategy = (
+                (1, 1, 1, 1),
+                (1, 1, 1, 1),
+                (1, 1, 1, 1),
+            )
+        self.flash_attention.shard(in_strategy)
+        dp = in_strategy[0][0]
+        mp = in_strategy[0][1]
+        self.flash_attention.add_prim_attr("dev_matrix_shape", [dp, mp, 1, 1])
+        inputs_tensor_map = [
+            [3, 2, 1, 0],
+            [3, 2, 1, 0],
+            [3, 2, 1, 0],
+        ]
+        if self.have_attention_mask_batch:
+            inputs_tensor_map.append([3, 1, 0])
+        else:
+            inputs_tensor_map.append([-1, 1, 0])
+
+        input_empty_args_num = 2
+        self.flash_attention.add_prim_attr("inputs_tensor_map", inputs_tensor_map)
+
+        self.flash_attention.add_prim_attr("outputs_tensor_map", [
+            [3, 2, 1, 0],  # O
+            [3, 2, 1],  # L
+        ])
+        self.flash_attention.add_prim_attr("as_loss_divisor", 0)
+        self.flash_attention.add_prim_attr("empty_mirror_ops", input_empty_args_num)
 
     def construct(self, q, k, v, attn_mask=None, drop_mask=None):
         alibi_mask = None # 算子预留接口，nz未适配，当前不测试
@@ -89,6 +130,18 @@ def np_impl_sa_fwd(Q, K, V, attn_mask=None, drop_mask=None):
     O = np.matmul(P, V)
     mid_results = (Sim, P, row_sum, row_max)
     return O, mid_results
+
+
+def ms_impl_triangle_atten_fwd(q, k, v, attn_mask=None, block_size=512):
+    batch_size, seq_len = q.shape[0], q.shape[2]
+    if attn_mask is None:
+        attn_mask = Tensor(np.triu(
+            np.ones(shape=(batch_size, seq_len, seq_len)), k=1), dtype=mstype.float16)
+
+    model = TriangleAttention(block_size)
+
+    out = model(q, k, v, attn_mask).asnumpy()
+    return out
 
 
 def np_impl_sa_grad(Q, K, V, P, O, dO, drop_mask=None):
