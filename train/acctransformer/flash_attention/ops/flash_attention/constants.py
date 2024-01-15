@@ -15,12 +15,9 @@
 """define constants"""
 from tbe import tik
 
-HARDWARE_MAX_STRIDE_LMT = 65535 # < 64K
-TILING_BLOCK_SIZE = 128
 BLOCK_NUM = 16
 FP16 = "float16"
 INT8 = "int8"
-UINT8 = "uint8"
 INT32 = "int32"
 FP32 = "float32"
 REPEAT_SZ = 128
