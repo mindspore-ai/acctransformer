@@ -15,13 +15,9 @@
 """the common about tik ops"""
 from functools import partial
 
-from tbe import tik
-
 from acctransformer.flash_attention.ops.flash_attention.constants import DTYPE_SIZE
 from acctransformer.flash_attention.ops.flash_attention.constants import FP16
 from acctransformer.flash_attention.ops.flash_attention.constants import FP32
-from acctransformer.flash_attention.ops.flash_attention.constants import L0A
-from acctransformer.flash_attention.ops.flash_attention.constants import L0B
 from acctransformer.flash_attention.ops.flash_attention.constants import L0C
 from acctransformer.flash_attention.ops.flash_attention.constants import UB
 
@@ -51,6 +47,10 @@ class TikOpsUtils:
         K0 = 16
         K1 = k // K0
         M = self.up_align_to_K0(m)
+        try:
+            dtype_size = DTYPE_SIZE[dtype]
+        except KeyError:
+            raise ValueError("The argument 'dtype' is not valid.")
         if workspace_tensor is not None:
             with self.tik_instance.for_range(0, K1) as i:
                 self.tik_instance.data_move(
@@ -58,8 +58,8 @@ class TikOpsUtils:
                     mk_input_tensor[i * K0:],
                     0,
                     M,
-                    K0 * DTYPE_SIZE[dtype] // 32,
-                    (K1 - 1) * K0 * DTYPE_SIZE[dtype] // 32,
+                    K0 * dtype_size // 32,
+                    (K1 - 1) * K0 * dtype_size // 32,
                     0,
                 )
             return workspace_tensor.reshape((K1, M, K0))
@@ -73,12 +73,12 @@ class TikOpsUtils:
                     mk_input_tensor[i * K0:],
                     0,
                     M,
-                    K0 * DTYPE_SIZE[dtype] // 32,
-                    (K1 - 1) * K0 * DTYPE_SIZE[dtype] // 32,
+                    K0 * dtype_size // 32,
+                    (K1 - 1) * K0 * dtype_size // 32,
                     0,
                 )
             self.cont_data_mv_1_bust(
-                dst=mk_input_tensor, src=tmp_ub, burst=K1 * M * K0 * DTYPE_SIZE[dtype] // 32)
+                dst=mk_input_tensor, src=tmp_ub, burst=K1 * M * K0 * dtype_size // 32)
             return mk_input_tensor.reshape((K1, M, K0))
 
     def transpose_matrix(self, src_ub, dst_ub, N, nk0=False):
@@ -123,10 +123,14 @@ class TikOpsUtils:
         K0 = 16
         K1 = k // K0
         N = n
+        try:
+            dtype_size = DTYPE_SIZE[dtype]
+        except KeyError:
+            raise ValueError("The argument 'dtype' is not valid.")
         with self.tik_instance.for_range(0, K1) as index:
             k1nk0_ub = self.tik_instance.Tensor(dtype, (N, K0), UB, "k1nk0_ub")
             src_ub = self.tik_instance.Tensor(dtype, (K0, N), UB, "src_ub")
-            burst_len = K0 * N * DTYPE_SIZE[dtype] // 32
+            burst_len = K0 * N * dtype_size // 32
             self.cont_data_mv_1_bust(dst=src_ub, src=kn_input_tensor[index * K0 * N],
                                      burst=burst_len)
             k1nk0_ub = self.transpose_matrix(src_ub, k1nk0_ub, N)
@@ -150,7 +154,10 @@ class TikOpsUtils:
         """
         dtype = N1MN0_input.dtype
         N1, M, N0 = N1MN0_input.shape
-
+        try:
+            dtype_size = DTYPE_SIZE[dtype]
+        except KeyError:
+            raise ValueError("The argument 'dtype' is not valid.")
         with self.tik_instance.new_stmt_scope(disable_sync=False):
             tmp_ub = self.tik_instance.Tensor(dtype, (M, N1 * N0), name="tmp_ub", scope=UB)
             # data_move (n1,m,n0) --> (m,n)
@@ -160,27 +167,13 @@ class TikOpsUtils:
                     N1MN0_input[i * M * N0:],
                     0,
                     M,
-                    N0 * DTYPE_SIZE[dtype] // 32,
+                    N0 * dtype_size // 32,
                     0,
-                    (N1 - 1) * N0 * DTYPE_SIZE[dtype] // 32,
+                    (N1 - 1) * N0 * dtype_size // 32,
                 )
             # data_move out
-            self.cont_data_mv_1_bust(dst=N1MN0_input, src=tmp_ub, burst=M * N1 * N0 * DTYPE_SIZE[
-                dtype] // 32)
+            self.cont_data_mv_1_bust(dst=N1MN0_input, src=tmp_ub, burst=M * N1 * N0 * dtype_size // 32)
         return N1MN0_input.reshape((M, N1 * N0))
-
-    def broadcast_vec_from_M_to_MN0(self, vec_ub):
-        """broadcast a vec from (M,) to (M, 16)"""
-        M = vec_ub.shape[0]
-        dst_ub = self.tik_instance.Tensor(FP16, (M, 16), name="dst_ub", scope=UB)
-        with self.tik_instance.new_stmt_scope(disable_sync=False):
-            broadcast_l0c = self.tik_instance.Tensor(FP16, (16, M), name="broadcast_l0c", scope=L0C)
-            self.tik_instance.broadcast_ub_to_l0c(broadcast_l0c, vec_ub, 1, M // 16, 1, 1)
-            broadcast_ub = self.tik_instance.Tensor(FP16, (16, M), name="broadcast_ub", scope=UB)
-            self.cont_data_mv_1_bust(dst=broadcast_ub, src=broadcast_l0c, burst=M * 16 * 2 // 512)
-            # (M // N0, 16, N0) -> (M, 16), N0 = 16
-            self.tik_instance.vec_trans(dst_ub, broadcast_ub, M // 16, 1, 1)
-        return dst_ub
 
     def broadcast(self, vec_ub, shape):
         """ broadcast a vector to a matrix
@@ -192,11 +185,27 @@ class TikOpsUtils:
         dst_ub = self.tik_instance.Tensor(FP16, shape, name="dst_ub", scope=UB)
 
         with self.tik_instance.new_stmt_scope(disable_sync=False):
-            M_16_ub = self.broadcast_vec_from_M_to_MN0(vec_ub)
-            # (M, 16) -> (M, 32) -> (M, 64) -> ... -> (M, N)
-            self.tik_instance.data_move(dst_ub, M_16_ub, 0, M, 1, 0, N // 16 - 1)
+            # (M,) -> (2, M) -> (4, M) -> (8, M) -> (16, M)
+            tmp_ub1 = self.tik_instance.Tensor(FP16, (16, M), name="tmp_ub1", scope=UB)
+            self.tik_instance.data_move(tmp_ub1, vec_ub, 0, 1, M // 16, 0, 0)
             times = self.tik_instance.Scalar("int32", name="times", init_value=1)
-            with self.tik_instance.for_range(begint=0, endt=N) as idx:
+            with self.tik_instance.for_range(begint=0, endt=16):
+                with self.tik_instance.if_scope(times <= 8):
+                    offset = times * M
+                    burst = times * M // 16
+                    self.cont_data_mv_1_bust(dst=tmp_ub1[offset], src=tmp_ub1, burst=burst)
+                with self.tik_instance.else_scope():
+                    self.tik_instance.tik_break()
+                times.set_as(times * 2)
+
+            # (16, M) -> (M, 16)
+            tmp_ub2 = self.tik_instance.Tensor(FP16, (M, 16), name="tmp_ub2", scope=UB)
+            tmp_ub2_transposed = self.transpose_matrix(tmp_ub1, tmp_ub2, M)
+
+            # (M, 16) -> (M, 32) -> (M, 64) -> ... -> (M, N)
+            self.tik_instance.data_move(dst_ub, tmp_ub2_transposed, 0, M, 1, 0, N // 16 - 1)
+            times.set_as(1)
+            with self.tik_instance.for_range(begint=0, endt=N):
                 offset = times * 16
                 with self.tik_instance.if_scope(offset * 2 <= N):
                     burst = offset // 16
@@ -240,15 +249,21 @@ class TikOpsUtils:
         """get K0"""
         if dtype is None:
             dtype = self.dtype
-
-        return 32 // DTYPE_SIZE[dtype]
+        try:
+            dtype_size = DTYPE_SIZE[dtype]
+        except KeyError:
+            raise ValueError("The argument 'dtype' is not valid.")
+        return 32 // dtype_size
 
     def up_align_to_K0(self, n, dtype=None):
         """byte alignment by dtype"""
         if dtype is None:
             dtype = self.dtype
-
-        K0 = 32 // DTYPE_SIZE[dtype]
+        try:
+            dtype_size = DTYPE_SIZE[dtype]
+        except KeyError:
+            raise ValueError("The argument 'dtype' is not valid.")
+        K0 = 32 // dtype_size
         return (n + K0 - 1) // K0 * K0
 
     def calc_vec_rec(self, vec_ub, vec_len):
@@ -256,9 +271,13 @@ class TikOpsUtils:
         dtype = vec_ub.dtype
         vec_len_aligned = self.up_align_to_K0(vec_len)
         vec_rec_ub = self.tik_instance.Tensor(dtype, (vec_len_aligned,), scope=UB, name="li_new_rec_ub")
-        mask_len = 256 // DTYPE_SIZE[dtype]
-        block_len = 32 // DTYPE_SIZE[dtype]
-        work_size = 8 // DTYPE_SIZE[dtype]
+        try:
+            dtype_size = DTYPE_SIZE[dtype]
+        except KeyError:
+            raise ValueError("The argument 'dtype' is not valid.")
+        mask_len = 256 // dtype_size
+        block_len = 32 // dtype_size
+        work_size = 8 // dtype_size
 
         with self.tik_instance.new_stmt_scope(disable_sync=False):
             repeat_times = vec_len // mask_len
@@ -292,8 +311,8 @@ class TikOpsUtils:
                 )
                 self.tik_instance.vec_rec_high_preci(
                     mask_len,
-                    vec_rec_ub[repeat_times * mask_len:],
-                    vec_ub[repeat_times * mask_len:],
+                    vec_rec_ub[repeat_times * 128:],
+                    vec_ub[repeat_times * 128:],
                     work_tensor_ub2[0:],
                     1,
                     0,
@@ -328,7 +347,7 @@ class TikOpsUtils:
 
         return rowsum_ub
 
-    def matmul_compute(self, A_l1, B_l1, m, k, n, N1MN0_to_MN=True, precision_type=FP16, workspace=None):
+    def matmul_compute(self, A_l1, B_l1, m, k, n, N1MN0_to_MN=True, precision_type=FP16):
         """calculate matrix multiplication A_l1 * B_l1, and move the result to C_ub,
         then rearrange C_ub
         :param A_l1: input tensor in L1 with shape of (K1, M, K0)
@@ -341,11 +360,11 @@ class TikOpsUtils:
         """
         M = self.up_align_to_K0(m)
         N = self.up_align_to_K0(n)
-        # 根据精度类型，决定matmul返回的ub精度类型，如果fp16, tensor_move做随路精度转换
-        if workspace is None:
-            C_ub = self.tik_instance.Tensor(precision_type, (N // 16, M, 16), name="C_ub", scope=UB)
-        else:
-            C_ub = workspace
+        C_ub = self.tik_instance.Tensor(precision_type, (N // 16, M, 16), name="C_ub", scope=UB)
+        try:
+            dtype_size = DTYPE_SIZE[FP32]
+        except KeyError:
+            raise ValueError("The argument 'dtype' is not valid.")
         with self.tik_instance.new_stmt_scope(disable_sync=False):
             # matmul
             C_l0c = self.tik_instance.Tensor(
@@ -353,123 +372,10 @@ class TikOpsUtils:
             )  # n1mn0 (n0=16)
             self.tik_instance.matmul(C_l0c, A_l1, B_l1, m, k, n)
             # L0C -> ub, fp32 -> fp16 (tensor_mov可做随路转换)
-            self.tik_instance.tensor_mov(C_ub, C_l0c, "m", 1, M * N * DTYPE_SIZE[FP32] // 1024, 0, 0)
+            self.tik_instance.tensor_mov(C_ub, C_l0c, "m", 1, M * N * dtype_size // 1024, 0, 0)
         if N1MN0_to_MN:
             return self.N1MN0_TO_MN(C_ub)
-        else:
-            return C_ub
-
-    def mmad_compute_transpose(self, A_l1, B_l1, m, k, n, a_transpose=False, b_transpose=False,
-                     N1MN0_to_MN=False, precision_type=FP16):
-        """calculate matrix multiplication A_l1 * B_l1, and move the result to C_ub,
-        then rearrange C_ub
-        :param A_l1: input tensor in L1 zN format
-        :param B_l1: input tensor in L1 zN format
-        :param m: the actual number of rows of A_l1
-        :param k: the actual number of cols of A_l1
-        :param n: the actual number of cols of B_l1
-        :param a_transpose: A Whether to transpose
-        :param b_transpose: B Whether to transpose
-        :param N1MN0_to_MN: Whether reorder the result tensor.
-        :return: C_ub with tensor with shape of (M, N) if N1MN0_to_MN else (N1, M, N0)
-        """
-        M = self.up_align_to_K0(m)
-        N = self.up_align_to_K0(n)
-        K = self.up_align_to_K0(k)
-        # todo: if m == 1:  # m=1时, mmad 退化成gemv, l0A 排布: m=1 Nd, m=2 zZ;
-        # 根据精度类型，决定matmul返回的ub精度类型，如果fp16, tensor_move做随路精度转换
-        C_ub = self.tik_instance.Tensor(precision_type, (N // 16, M, 16), name="C_ub", scope=UB)
-        with self.tik_instance.new_stmt_scope(disable_sync=False):
-            # matmul
-            C_l0c = self.tik_instance.Tensor(
-                FP32, (N // 16, M, 16), scope=L0C, name="C_l0c"
-            )  # n1mn0 (n0=16)
-            A_l0a = self.tik_instance.Tensor(FP16, (M, K), scope=L0A, name="A_l0a")
-            # Nz -> zZ
-            if a_transpose:
-                self.tik_instance.load2dv1(dst=A_l0a, src=A_l1, index=0,
-                                           repeat_times=M * K * DTYPE_SIZE[FP16] // 512,
-                                           src_stride=1, sid=0, if_transpose=True)
-            else:
-                for i in range(M // 16):  # todo: 使用少的循环次数
-                    self.tik_instance.load2dv1(dst=A_l0a[i * K * 16], src=A_l1[i * 256], index=0,
-                                               repeat_times=16 * K * DTYPE_SIZE[FP16] // 512,
-                                               src_stride=M//16, sid=0, if_transpose=False)
-            B_l0b = self.tik_instance.Tensor(FP16, (K, N), scope=L0B, name="B_l0b")
-            if b_transpose:
-                self.tik_instance.load2dv1(dst=B_l0b, src=B_l1, index=0,
-                                           repeat_times=N * K * DTYPE_SIZE[FP16] // 512,
-                                           src_stride=1, sid=0, if_transpose=False)
-            else:
-                for i in range(K // 16):
-                    self.tik_instance.load2dv1(dst=B_l0b[i * N * 16], src=B_l1[i * 256], index=0,
-                                               repeat_times=16 * N * DTYPE_SIZE[FP16] // 512,
-                                               src_stride=K//16, sid=0, if_transpose=True)
-            self.tik_instance.mmad(C_l0c, A_l0a, B_l0b, m, k, n, is_bias=0)
-            # L0C -> ub, fp32 -> fp16 (tensor_mov可做随路转换)
-            self.tik_instance.tensor_mov(C_ub, C_l0c, "m", 1, M * N * DTYPE_SIZE[FP32] // 1024, 0, 0)
-        if N1MN0_to_MN:
-            return self.N1MN0_TO_MN(C_ub)
-        else:
-            return C_ub
-
-    def mmad_compute(self, A_l1, B_l1, m, k, n, N1MN0_to_MN=False, precision_type=FP16):
-        """calculate matrix multiplication A_l1 * B_l1, and move the result to C_ub,
-        then rearrange C_ub
-        :param A_l1: input tensor in L1 zN format
-        :param B_l1: input tensor in L1 zN format
-        :param m: the actual number of rows of A_l1
-        :param k: the actual number of cols of A_l1
-        :param n: the actual number of cols of B_l1
-        :param N1MN0_to_MN: Whether reorder the result tensor.
-        :return: C_ub with tensor with shape of (M, N) if N1MN0_to_MN else (N1, M, N0)
-        """
-        M = self.up_align_to_K0(m)
-        N = self.up_align_to_K0(n)
-        K = self.up_align_to_K0(k)
-        k_tail = 16 if k % 16 == 0 else k % 16
-        # 根据精度类型，决定matmul返回的ub精度类型，如果fp16, tensor_move做随路精度转换
-        C_ub = self.tik_instance.Tensor(precision_type, (N // 16, M, 16), name="C_ub", scope=UB)
-        with self.tik_instance.new_stmt_scope(disable_sync=False):
-            # matmul
-            C_l0c = self.tik_instance.Tensor(FP32, (N // 16, M, 16), scope=L0C, name="C_l0c")  # n1mn0 (n0=16)
-            if K > 16:
-                with self.tik_instance.for_range(0, K // 16 // 2) as i:
-                    with self.tik_instance.for_range(0, 2, thread_num=2) as t_idx:
-                        A_l0a = self.tik_instance.Tensor(FP16, (M, 16), scope=L0A, name="A_l0a")
-                        B_l0b = self.tik_instance.Tensor(FP16, (16, N), scope=L0B, name="B_l0b")
-                        self.tik_instance.load2dv1(dst=A_l0a, src=A_l1[(i * 2 + t_idx) * M * 16], index=0,
-                                                   repeat_times=16 * M * DTYPE_SIZE[FP16] // 512,
-                                                   src_stride=1, sid=0, if_transpose=False)
-                        self.tik_instance.load2dv1(dst=B_l0b, src=B_l1[(i * 2 + t_idx) * 256], index=0,
-                                                   repeat_times=16 * N * DTYPE_SIZE[FP16] // 512,
-                                                   src_stride=K//16, sid=0, if_transpose=True)
-                        with self.tik_instance.if_scope(tik.all(i == 0, t_idx == 0)):
-                            self.tik_instance.mmad(C_l0c, A_l0a, B_l0b, m, 16, n, is_bias=0)
-                        with self.tik_instance.elif_scope(tik.all(K // 16 % 2 == 0, i == K // 16 // 2 - 1, t_idx == 1)):
-                            self.tik_instance.mmad(C_l0c, A_l0a, B_l0b, m, k_tail, n, is_bias=1)
-                        with self.tik_instance.else_scope():
-                            self.tik_instance.mmad(C_l0c, A_l0a, B_l0b, m, 16, n, is_bias=1)
-            if K // 16 % 2 > 0:  # 尾快处理
-                A_l0a = self.tik_instance.Tensor(FP16, (M, 16), scope=L0A, name="A_l0a")
-                B_l0b = self.tik_instance.Tensor(FP16, (16, N), scope=L0B, name="B_l0b")
-                self.tik_instance.load2dv1(dst=A_l0a, src=A_l1[(K // 16 - 1) * M * 16], index=0,
-                                           repeat_times=16 * M * DTYPE_SIZE[FP16] // 512,
-                                           src_stride=1, sid=0, if_transpose=False)
-                self.tik_instance.load2dv1(dst=B_l0b, src=B_l1[(K // 16 - 1) * 256], index=0,
-                                           repeat_times=16 * N * DTYPE_SIZE[FP16] // 512,
-                                           src_stride=K // 16, sid=0, if_transpose=True)
-                with self.tik_instance.if_scope(K > 16):
-                    self.tik_instance.mmad(C_l0c, A_l0a, B_l0b, m, k_tail, n, is_bias=1)
-                with self.tik_instance.else_scope():
-                    self.tik_instance.mmad(C_l0c, A_l0a, B_l0b, m, k, n, is_bias=0)
-
-            # L0C -> ub, fp32 -> fp16 (tensor_mov可做随路转换)
-            self.tik_instance.tensor_mov(C_ub, C_l0c, "m", 1, M * N * DTYPE_SIZE[FP32] // 1024, 0, 0)
-        if N1MN0_to_MN:
-            return self.N1MN0_TO_MN(C_ub)
-        else:
-            return C_ub
+        return C_ub
 
     def move_vector_from_gm_to_ub(self, dst_tensor, src_tensor, gm_offset, vec_len):
         """load the vector from gm to ub
@@ -478,8 +384,11 @@ class TikOpsUtils:
         :param gm_offset:
         :return:
         """
-        dtype = src_tensor.dtype
-        a_burst_num = 32 // DTYPE_SIZE[dtype]
+        try:
+            dtype_size = DTYPE_SIZE[src_tensor.dtype]
+        except KeyError:
+            raise ValueError("The argument 'src_tensor dtype' is not valid.")
+        a_burst_num = 32 // dtype_size
         full_tik_blk_num, tail_num = divmod(vec_len, a_burst_num)
         with self.tik_instance.if_scope(full_tik_blk_num > 0):
             self.cont_data_mv_1_bust(dst=dst_tensor, src=src_tensor[gm_offset],
@@ -487,9 +396,9 @@ class TikOpsUtils:
         # 地址回退处理尾部数据
         with self.tik_instance.if_scope(tail_num > 0):
             offset = vec_len - a_burst_num
-            last_blk_ub = self.tik_instance.Tensor(dtype, (a_burst_num,), name="last_blk_ub", scope=UB)
+            last_blk_ub = self.tik_instance.Tensor(FP16, (a_burst_num,), name="last_blk_ub", scope=UB)
             self.cont_data_mv_1_bust(dst=last_blk_ub, src=src_tensor[gm_offset + offset], burst=1)
-            with self.tik_instance.for_range(0, a_burst_num) as idx:  # offset非32bytes对齐，无法用datamove
+            with self.tik_instance.for_range(0, a_burst_num) as idx:  # offset非32bytes对齐, 无法用datamove
                 dst_tensor[offset + idx].set_as(last_blk_ub[idx])
 
     def move_vector_from_ub_to_gm(self, dst_tensor, src_tensor, gm_offset, block_h):
@@ -500,8 +409,11 @@ class TikOpsUtils:
         :param block_h:
         :return:
         """
-        dtype = src_tensor.dtype
-        a_burst_num = 32 // DTYPE_SIZE[dtype]
+        try:
+            dtype_size = DTYPE_SIZE[src_tensor.dtype]
+        except KeyError:
+            raise ValueError("The argument 'src_tensor dtype' is not valid.")
+        a_burst_num = 32 // dtype_size
         full_tik_blk_num = block_h // a_burst_num
         with self.tik_instance.if_scope(full_tik_blk_num > 0):
             self.cont_data_mv_1_bust(dst=dst_tensor[gm_offset], src=src_tensor,
@@ -509,7 +421,7 @@ class TikOpsUtils:
         tail_num = block_h % a_burst_num
         with self.tik_instance.if_scope(tail_num > 0):
             offset = block_h - a_burst_num
-            tmp_ub = self.tik_instance.Tensor(dtype, (a_burst_num,), name="tmp_ub", scope=UB)
+            tmp_ub = self.tik_instance.Tensor(FP16, (a_burst_num,), name="tmp_ub", scope=UB)
             with self.tik_instance.for_range(0, a_burst_num) as idx:
                 tmp_ub[idx].set_as(src_tensor[offset + idx])
             self.cont_data_mv_1_bust(dst=dst_tensor[gm_offset + offset], src=tmp_ub, burst=1)

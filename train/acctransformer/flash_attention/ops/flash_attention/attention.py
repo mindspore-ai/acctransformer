@@ -25,14 +25,12 @@ from tbe.common.platform import get_soc_spec
 from acctransformer.flash_attention.ops.flash_attention.constants import FP16
 from acctransformer.flash_attention.ops.flash_attention.constants import FP32
 from acctransformer.flash_attention.ops.flash_attention.constants import GM
-from acctransformer.flash_attention.ops.flash_attention.constants import HARDWARE_MAX_STRIDE_LMT
 from acctransformer.flash_attention.ops.flash_attention.constants import MASK_FILL_VALUE
 from acctransformer.flash_attention.ops.flash_attention.constants import UB
-from acctransformer.flash_attention.ops.flash_attention.constants import TILING_BLOCK_SIZE
 from acctransformer.flash_attention.ops.flash_attention.tik_ops_utils import TikOpsUtils
-from acctransformer.flash_attention.ops.flash_attention.tiling_strategy.sparse_tiling import SparseTiling
 from acctransformer.flash_attention.ops.flash_attention.tiling_strategy.strategy import TilingPara
 from acctransformer.flash_attention.ops.flash_attention.tiling_strategy.strategy import TilingStrategy
+from acctransformer.flash_attention.ops.flash_attention.tiling_strategy.sparse_tiling import SparseTiling
 
 
 class FlashAttention(metaclass=ABCMeta):
@@ -42,6 +40,7 @@ class FlashAttention(metaclass=ABCMeta):
                  tiling_stgy_cls,
                  prev_block_num=65536,
                  next_block_num=65536,
+                 high_precision=False,
                  disable_debug=True):
         """
         Init parameter shape
@@ -79,8 +78,6 @@ class FlashAttention(metaclass=ABCMeta):
         self.B, self.Nq = batch_size * h, Nq
         self.N = self.k_ori_shape[2]
         self.actual_d = actual_d
-        self.Nq_N0 = self.Nq * self.N0
-        self.N_N0 = self.N * self.N0
 
         self.l_shape = [batch_size, h, self.Nq]
         self.m_shape = [batch_size, h, self.Nq]
@@ -88,6 +85,11 @@ class FlashAttention(metaclass=ABCMeta):
 
         self.prev_block_num = prev_block_num
         self.next_block_num = next_block_num
+        self.high_precision = high_precision
+        if self.high_precision:
+            self.precision_type = FP32
+        else:
+            self.precision_type = FP16
         if tiling_stgy_cls is None:
             self.tiling_stgy = SparseTiling(self.Nq, self.N, self.d)
         else:
@@ -107,8 +109,8 @@ class FlashAttention(metaclass=ABCMeta):
         self.alibi_mask_gm = None
 
     @staticmethod
-    def get_l_gm_offset(batch_start, batch_idx, h, block_h, block_idx):
-        """get l gm offset"""
+    def get_l_m_gm_offset(batch_start, batch_idx, h, block_h, block_idx):
+        """get l m gm offset"""
         gm_offset = (batch_start + batch_idx) * h + block_idx * block_h
         return gm_offset
 
@@ -276,14 +278,6 @@ class FlashAttention(metaclass=ABCMeta):
                         + block_w_idx * (h * block_w) + block_h_idx * block_h * self.N0
         return gm_offset
 
-    def is_only_causal_mask(self, attn_mask_ori_shape):
-        """check attn mask is only causal mask"""
-        if len(attn_mask_ori_shape) == 2:
-            return attn_mask_ori_shape[0] == TILING_BLOCK_SIZE and attn_mask_ori_shape[1] == TILING_BLOCK_SIZE
-        if len(attn_mask_ori_shape) == 3:
-            return attn_mask_ori_shape[0] == 1 and attn_mask_ori_shape[1] == TILING_BLOCK_SIZE and \
-                   attn_mask_ori_shape[2] == TILING_BLOCK_SIZE
-
     def parse_input_shape(self, alibi_mask, attn_mask, dropout_mask, k, q, v):
         """parser input shape"""
         self.has_attn_mask = False
@@ -299,8 +293,6 @@ class FlashAttention(metaclass=ABCMeta):
         if attn_mask is not None:
             self.has_attn_mask = True
             self.att_mask_shape = attn_mask["shape"]
-            attn_mask_ori_shape = attn_mask["ori_shape"]
-            self.only_causal = self.is_only_causal_mask(attn_mask_ori_shape)
         if dropout_mask is not None:
             self.has_drop_mask = True
             self.drop_mask_shape = dropout_mask["shape"]
@@ -354,21 +346,17 @@ class FlashAttention(metaclass=ABCMeta):
             alibi_mask_ub_broadcast = self.tik_ops_utils.broadcast_row(alibi_mask_ub, (m_aligned, n_aligned))
             self.tik_instance.h_add(Sij_ub, Sij_ub, alibi_mask_ub_broadcast)
 
-    def do_att_mask(self, Sij_ub_zN, attn_mask_gm_offset, q_blk_height, kv_blk_height,
-                    q_blk_h_aligned, kv_blk_h_aligned, only_causal=False):
+    def do_att_mask(self, Sij_ub_N1MN0, attn_mask_gm_offset, q_blk_height, kv_blk_height,
+                    q_blk_h_aligned, kv_blk_h_aligned):
         """load attn mask from gm to ub, then mul it by MASK_FILL_VALUE and add Sij"""
         with self.tik_instance.new_stmt_scope(disable_sync=False):
-            att_mask_ub_zN = self.tik_instance.Tensor(FP16, (kv_blk_h_aligned // self.N0, q_blk_h_aligned, self.N0),
-                                                   scope=UB, name="att_mask_ub_zN")
-            if only_causal:
-                self.cont_data_mv_1_bust(dst=att_mask_ub_zN, src=self.att_mask_gm,
-                                         burst=q_blk_h_aligned * kv_blk_h_aligned // 16)
-            else:
-                self.tik_instance.data_move(att_mask_ub_zN, self.att_mask_gm[attn_mask_gm_offset], 0,
-                                            kv_blk_height // self.N0, q_blk_height * self.N0 // 16,
-                                            (self.Nq - q_blk_height) * self.N0 // 16, 0)
-            self.tik_instance.h_mul(att_mask_ub_zN, att_mask_ub_zN, MASK_FILL_VALUE)
-            self.tik_instance.h_add(Sij_ub_zN, Sij_ub_zN, att_mask_ub_zN)
+            att_mask_ub = self.tik_instance.Tensor(FP16, (kv_blk_h_aligned // self.N0, q_blk_h_aligned, self.N0),
+                                                   scope=UB, name="att_mask_ub")
+            self.tik_instance.data_move(att_mask_ub, self.att_mask_gm[attn_mask_gm_offset], 0,
+                                        kv_blk_height // self.N0, q_blk_height * self.N0 // 16,
+                                        (self.Nq - q_blk_height) * self.N0 // 16, 0)
+            self.tik_instance.h_mul(att_mask_ub, att_mask_ub, MASK_FILL_VALUE)
+            self.tik_instance.h_add(Sij_ub_N1MN0, Sij_ub_N1MN0, att_mask_ub)
 
     def do_dropout_mask(self, Pij_ub, dropout_mask_gm_offset, kv_blk_h_aligned, kv_blk_height,
                         q_blk_h_aligned, q_blk_height, precision_type=FP16, workspace=None):
@@ -416,21 +404,3 @@ class FlashAttention(metaclass=ABCMeta):
             config={"dump_cce_code": False, "save_temp_cce_file": True, "enable_const_fold": True},
             enable_l2=True
         )
-
-    def unroll_data_move(self, dst, dst_offset, src, src_offset, nburst, burst, src_stride, dst_stride,
-                         dst_offset_inc, src_offset_inc):
-        if dst_stride <= HARDWARE_MAX_STRIDE_LMT and src_stride <= HARDWARE_MAX_STRIDE_LMT:
-            self.tik_instance.data_move(
-                dst=dst[dst_offset],
-                src=src[src_offset],
-                sid=0,
-                nburst=nburst,
-                burst=burst,
-                dst_stride=dst_stride,
-                src_stride=src_stride
-            )
-        else:
-            for _ in range(nburst):
-                self.cont_data_mv_1_bust(dst=dst[dst_offset], src=src[src_offset], burst=burst)
-                src_offset += src_offset_inc
-                dst_offset += dst_offset_inc
