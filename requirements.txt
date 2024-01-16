@@ -1,4 +1,0 @@
-pytest-assume
-torch==1.11.0 # for infer test
-torch-npu==1.11.0 # for infer test
-numpy # for infer test
