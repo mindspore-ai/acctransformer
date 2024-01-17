@@ -5,7 +5,7 @@ import numpy as np
 from mindspore import Tensor
 
 from common import data_compare, display, set_env
-from common import FlashAttention, np_impl_sa_fwd
+from common import FlashAttention, np_impl_sa_fwd, ms_impl_triangle_atten_fwd
 
 set_env()
 
@@ -53,10 +53,10 @@ def test_fa_fwd_with_causal_attn_mask(q_shape, kv_shape):
     v = np.random.random(kv_shape).astype("float16")
     batch_size, q_seq_len, k_seq_len = q_shape[0], q_shape[2], kv_shape[2]
 
-    fa_attn_mask = np.triu(np.ones(shape=(128, 128), dtype=np.float16), k=1)
+    fa_attn_mask = np.triu(np.ones(shape=(1, 128, 128), dtype=np.float16), k=1)
     np_att_mask = np.triu(np.ones(shape=(1, q_seq_len, k_seq_len), dtype=np.float16), k=1)
 
-    model = FlashAttention()
+    model = FlashAttention(have_attention_mask_batch=False)
     cus_out = model(Tensor(q), Tensor(k), Tensor(v), Tensor(fa_attn_mask)).asnumpy()
     np_out, _ = np_impl_sa_fwd(q, k, v, np_att_mask)
 
@@ -90,5 +90,31 @@ def test_fa_fwd_without_attn_mask(q_shape, kv_shape):
     print(f"\n--------- shape: {q_shape}-{kv_shape} -------------")
     result, diff_gt_rtol_proportion, diff_gt_max_rtol_proportion = data_compare(np_out, cus_out)
     display(np_out, cus_out, result, diff_gt_rtol_proportion, diff_gt_max_rtol_proportion)
+
+    assert result == "Pass"
+
+
+@pytest.mark.parametrize(
+    "q_shape, kv_shape",
+    [
+        ((1, 40, 32 * 1024, 128), (1, 40, 32 * 1024, 128))
+    ],
+)
+def test_fa_fwd_compare_with_triangle_attention(q_shape, kv_shape):
+    q = np.random.random(q_shape).astype("float16")
+    k = np.random.random(kv_shape).astype("float16")
+    v = np.random.random(kv_shape).astype("float16")
+    batch_size, q_seq_len, k_seq_len = q_shape[0], q_shape[2], kv_shape[2]
+    block_size = 1024
+
+    att_mask = np.triu(np.ones(shape=(batch_size, q_seq_len, k_seq_len), dtype=np.float16), k=1)
+
+    model = FlashAttention()
+    cus_out = model(Tensor(q), Tensor(k), Tensor(v), Tensor(att_mask)).asnumpy()
+    triangle_out = ms_impl_triangle_atten_fwd(Tensor(q), Tensor(k), Tensor(v), Tensor(att_mask), block_size)
+
+    print(f"\n--------- shape: {q_shape}-{kv_shape} -------------")
+    result, diff_gt_rtol_proportion, diff_gt_max_rtol_proportion = data_compare(triangle_out, cus_out)
+    display(triangle_out, cus_out, result, diff_gt_rtol_proportion, diff_gt_max_rtol_proportion)
 
     assert result == "Pass"
