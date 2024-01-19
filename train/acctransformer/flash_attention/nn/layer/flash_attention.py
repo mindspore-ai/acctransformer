@@ -22,6 +22,8 @@ from mindspore.common.tensor import Tensor
 from mindspore import ops
 from mindspore.nn.cell import Cell
 from acctransformer.flash_attention.ops.flash_attention.flash_attention_impl import get_flash_attention
+from mindspore.ops.operations.nn_ops import FlashAttentionScore
+from mindspore._c_expression import MSContext
 
 __all__ = ['FlashAttention']
 
@@ -55,14 +57,15 @@ class FlashAttention(Cell):
             Default True
         alibi(bool): This parameter indicates whether the flashattention supports the Alibi.
             Default: False
+        use_mqa(bool): Using MHA if True, only take effect under 910B. Default: False.
 
 
     Inputs:
       - **query** (Tensor) - Tensor query (:class:`mstype.fp16` [batch_size, head_num, seq_length, head_dim])
       - **key** (Tensor) - Tensor key (:class:`mstype.fp16` [batch_size, head_num, seq_length, head_dim])
       - **value** (Tensor) - Tensor value (:class:`mstype.fp16` [batch_size, head_num, seq_length, head_dim])
-      - **attention_mask** (Tensor) - Float Tensor the mask of (:class:`mstype.fp16` [batch_size, seq_length,
-          seq_length]): A matrix to pass masked information.
+      - **attention_mask** (Tensor) - Float Tensor the mask of (:class:`mstype.fp16` `mstype.uint8`
+        [batch_size, seq_length, seq_length]): A matrix to pass masked information.
 
     Outputs:
         A Tensor. The output of the attention with shape [batch_size, head_num, seq_length, head_dim]
@@ -91,6 +94,7 @@ class FlashAttention(Cell):
 
     def __init__(self,
                  head_dim,
+                 head_num,
                  dropout_rate=0.0,
                  prev_block_num=65536,
                  next_block_num=65536,
@@ -99,7 +103,8 @@ class FlashAttention(Cell):
                  mp=1,
                  high_precision=False,
                  have_attention_mask_batch=True,
-                 alibi=False
+                 alibi=False,
+                 use_mqa=False
                  ):
         super(FlashAttention, self).__init__()
 
@@ -107,24 +112,54 @@ class FlashAttention(Cell):
         if scaling_constant == 0:
             raise ValueError("the scaling constant must not be 0.")
         self.dropout_rate = dropout_rate
-        self.scale_factor = Tensor([1. / math.sqrt(scaling_constant)], dtype=mstype.float16)
-        self.scale_mul = ops.Mul().shard(((dp, mp, 1, 1), (1,)))
-        self.ones = ops.Ones()
-        self.dim_mask = Tensor([1 for _ in range(head_dim)], dtype=mstype.int8)
-        self.have_attention_mask_batch = have_attention_mask_batch
-        self.alibi = alibi
-        self.flash_attention = get_flash_attention(
-            prev_block_num=prev_block_num,
-            next_block_num=next_block_num,
-            tiling_stgy_name=tiling_stgy_name,
-            high_precision=high_precision
-        )
-        self.flash_attention.add_prim_attr("primitive_target", "Ascend")
-        fa_strategies = ((dp, mp, 1, 1),
-                         (dp, mp, 1, 1),
-                         (dp, mp, 1, 1))
-        self.shard(fa_strategies)
+        self.is_910A = MSContext.get_instance().get_ascend_soc_version() == "ascend910"
+        if self.is_910A:
+            self.scale_factor = Tensor([1. / math.sqrt(scaling_constant)], dtype=mstype.float16)
+            self.scale_mul = ops.Mul().shard(((dp, mp, 1, 1), (1,)))
+            self.ones = ops.Ones()
+            self.dim_mask = Tensor([1 for _ in range(head_dim)], dtype=mstype.int8)
+            self.have_attention_mask_batch = have_attention_mask_batch
+            self.alibi = alibi
+            self.flash_attention = get_flash_attention(
+                prev_block_num=prev_block_num,
+                next_block_num=next_block_num,
+                tiling_stgy_name=tiling_stgy_name,
+                high_precision=high_precision
+            )
+            self.flash_attention.add_prim_attr("primitive_target", "Ascend")
+            fa_strategies = ((dp, mp, 1, 1),
+                             (dp, mp, 1, 1),
+                             (dp, mp, 1, 1))
+            self.shard(fa_strategies)
+        else:
+            if alibi:
+                raise ValueError(f"When soc_version is not Ascend910A, alibi must be False")
+            self.transpose_4d_pre = ops.Transpose().shard(((dp, mp, 1, 1),))
+            self.transpose_4d_post = ops.Transpose().shard(((dp, 1, mp, 1),))
+            self.reshape = ops.Reshape()
+            self.zeros_like = ops.ZerosLike().shard(((dp, mp, 1, 1),))
+            self.zeros = ops.Zeros()
+            self.attn_cast = ops.Cast()
+            if use_mqa:
+                fa_strategies = ((dp, mp, 1, 1),
+                                 (dp, 1, 1, 1),
+                                 (dp, 1, 1, 1),
+                                 (dp, 1, 1, 1))
+            else:
+                fa_strategies = ((dp, mp, 1, 1),
+                                 (dp, mp, 1, 1),
+                                 (dp, mp, 1, 1),
+                                 (dp, 1, 1, 1))
+            if dropout_rate > 1e-5:
+                fa_strategies += ((dp, mp, 1, 1),)
+            self.flash_attention = FlashAttentionScore(head_num=head_num, pre_tokens=prev_block_num,
+                                                       next_tokens=next_block_num,
+                                                       keep_prob=1 - dropout_rate,
+                                                       scale_value=1. / scaling_constant,
+                                                       inner_precise=0 if high_precision else 1,
+                                                       input_layout="BNSD").shard(fa_strategies)
 
+        self.dropout_rate = dropout_rate
         if self.dropout_rate > 1e-5:
             self.keep_prob = Tensor(1 - self.dropout_rate, dtype=mstype.float16)
             self.fill_v2 = ops.FillV2().shard(((dp, mp, 1, 1), ()))
@@ -140,46 +175,49 @@ class FlashAttention(Cell):
                                   such as MatMul. Default: None.
         :return:
         """
-        if in_strategy is None:
-            # default: dp=1, mp=1, construct inputs only contain query, key, value
-            in_strategy = (
-                (1, 1, 1, 1),
-                (1, 1, 1, 1),
-                (1, 1, 1, 1),
-            )
-        self.flash_attention.shard(in_strategy)
-        dp = in_strategy[0][0]
-        mp = in_strategy[0][1]
-        self.flash_attention.add_prim_attr("dev_matrix_shape", [dp, mp, 1, 1])
-        inputs_tensor_map = [
-            [3, 2, 1, 0],
-            [3, 2, 1, 0],
-            [3, 2, 1, 0],
-        ]
-        if self.have_attention_mask_batch:
-            inputs_tensor_map.append([3, 1, 0])
+        if self.is_910A:
+            if in_strategy is None:
+                # default: dp=1, mp=1, construct inputs only contain query, key, value
+                in_strategy = (
+                    (1, 1, 1, 1),
+                    (1, 1, 1, 1),
+                    (1, 1, 1, 1),
+                )
+            self.flash_attention.shard(in_strategy)
+            dp = in_strategy[0][0]
+            mp = in_strategy[0][1]
+            self.flash_attention.add_prim_attr("dev_matrix_shape", [dp, mp, 1, 1])
+            inputs_tensor_map = [
+                [3, 2, 1, 0],
+                [3, 2, 1, 0],
+                [3, 2, 1, 0],
+            ]
+            if self.have_attention_mask_batch:
+                inputs_tensor_map.append([3, 1, 0])
+            else:
+                inputs_tensor_map.append([-1, 1, 0])
+
+            input_empty_args_num = 2
+            # dropout_mask
+            if self.dropout_rate > 1e-5:
+                input_empty_args_num -= 1
+                inputs_tensor_map.append([3, 2, 1, 0])
+
+            if self.alibi:
+                input_empty_args_num -= 1
+                inputs_tensor_map.append([3, 2, 1, 0])
+
+            self.flash_attention.add_prim_attr("inputs_tensor_map", inputs_tensor_map)
+
+            self.flash_attention.add_prim_attr("outputs_tensor_map", [
+                [3, 2, 1, 0],  # O
+                [3, 2, 1],  # L
+                [3, 2, 1]  # M
+            ])
+            self.flash_attention.add_prim_attr("as_loss_divisor", 0)
+            self.flash_attention.add_prim_attr("empty_mirror_ops", input_empty_args_num)
         else:
-            inputs_tensor_map.append([-1, 1, 0])
-
-        input_empty_args_num = 2
-        # dropout_mask
-        if self.dropout_rate > 1e-5:
-            input_empty_args_num -= 1
-            inputs_tensor_map.append([3, 2, 1, 0])
-
-        if self.alibi:
-            input_empty_args_num -= 1
-            inputs_tensor_map.append([3, 2, 1, 0])
-
-        self.flash_attention.add_prim_attr("inputs_tensor_map", inputs_tensor_map)
-
-        self.flash_attention.add_prim_attr("outputs_tensor_map", [
-            [3, 2, 1, 0],  # O
-            [3, 2, 1],  # L
-            [3, 2, 1]  # M
-        ])
-        self.flash_attention.add_prim_attr("as_loss_divisor", 0)
-        self.flash_attention.add_prim_attr("empty_mirror_ops", input_empty_args_num)
+            self.flash_attention.shard(in_strategy)
 
     def construct(self, query, key, value, attn_mask=None, alibi_mask=None):
         """FlashAttention forward
@@ -191,30 +229,48 @@ class FlashAttention(Cell):
         :return: output          [bsz, head_num, seq_len, head_dim]
         """
         bsz, head_num, seq_len, head_dim = query.shape
-        _, k_head_num, k_seq_len, _ = key.shape
-        _, v_head_num, v_seq_len, _ = value.shape
-        if head_num != k_head_num or head_num != v_head_num:
-            raise ValueError(
-                "the head_num of query, key and value must be the same, "
-                "If different head_num are used, users need to change themselves to be same by tile.")
-        if seq_len % 16 != 0 or k_seq_len % 16 != 0 or k_seq_len != v_seq_len:
-            raise ValueError(
-                "query, key, value seq_len must be a multiple of 16, "
-                "and the seq_len between key and value must be equal.")
-        if head_dim > 304:
-            raise ValueError(
-                "the head_dim must be less than 304, otherwise the ub would be OOM.")
-        if self.dropout_rate > 1e-5:
-            drop_mask_bits = self.drop_gen_mask((bsz, head_num, seq_len, seq_len), self.keep_prob)
-            tensor_shape = Tensor((bsz, head_num, seq_len, seq_len), mstype.int32)
-            ones = self.fill_v2(tensor_shape, self.tensor_one)
-            ones = self.depend(ones, query)
-            drop_mask = self.do_dropout(ones, drop_mask_bits, self.keep_prob)
+        if self.is_910A:
+            _, k_head_num, k_seq_len, _ = key.shape
+            _, v_head_num, v_seq_len, _ = value.shape
+            if head_num != k_head_num or head_num != v_head_num:
+                raise ValueError(
+                    "the head_num of query, key and value must be the same, "
+                    "If different head_num are used, users need to change themselves to be same by tile.")
+            if seq_len % 16 != 0 or k_seq_len % 16 != 0 or k_seq_len != v_seq_len:
+                raise ValueError(
+                    "query, key, value seq_len must be a multiple of 16, "
+                    "and the seq_len between key and value must be equal.")
+            # 910A -- FlashAttentionPrimtive
+            if head_dim > 304:
+                raise ValueError(
+                    "the head_dim must be less than 304, otherwise the ub would be OOM.")
+            if self.dropout_rate > 1e-5:
+                drop_mask_bits = self.drop_gen_mask((bsz, head_num, seq_len, seq_len), self.keep_prob)
+                tensor_shape = Tensor((bsz, head_num, seq_len, seq_len), mstype.int32)
+                ones = self.fill_v2(tensor_shape, self.tensor_one)
+                ones = self.depend(ones, query)
+                drop_mask = self.do_dropout(ones, drop_mask_bits, self.keep_prob)
+            else:
+                drop_mask = None
+            query = self.scale_mul(query, self.scale_factor)
+            key = self.scale_mul(key, self.scale_factor)
+            attn_mask = self.cast(attn_mask, mstype.float16)
+            output, _, _ = self.flash_attention(query, key, value, attn_mask, drop_mask, alibi_mask)
         else:
-            drop_mask = None
-        query = self.scale_mul(query, self.scale_factor)
-        key = self.scale_mul(key, self.scale_factor)
-        attn_mask = self.cast(attn_mask, mstype.float16)
-        output, _, _ = self.flash_attention(query, key, value, attn_mask, drop_mask, alibi_mask)
-
+            # 910B -- FlashAttentionScore
+            if self.dropout_rate > 1e-5:
+                drop_mask_bits = self.reshape(self.drop_gen_mask((bsz, head_num, seq_len, seq_len), self.keep_prob),
+                                              (bsz, head_num, seq_len, seq_len // 8))
+            else:
+                drop_mask_bits = None
+            # (B, S, S) -> (B, 1, S, S)
+            attn_mask = self.cast(self.reshape(attn_mask, (bsz, 1, seq_len, seq_len)), mstype.uint8)
+            output, _, _ = self.flash_attention(query,
+                                                key,
+                                                value,
+                                                attn_mask,
+                                                drop_mask_bits,
+                                                None,
+                                                None,
+                                                None)
         return output
