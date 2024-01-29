@@ -249,8 +249,7 @@ class FlashAttentionFwd(FlashAttention):
 
             self.tik_instance.h_mul(li_new_rec_ub, li_new_rec_ub, li_ub)
             self.tik_instance.h_mul(li_new_rec_ub, li_new_rec_ub, exp_m_old_fp32)
-            li_new_rec_vec_ub = self.tik_instance.Tensor(FP32, (block_h, self.N0), name="li_new_rec_vec_ub",
-                                                         scope=UB)
+            li_new_rec_vec_ub = exp_m_cur_fp32_vec_ub.reshape((block_h, self.N0))
             for i in range(block_h):
                 src_scalar = self.tik_instance.Scalar(init_value=li_new_rec_ub[i], dtype=FP32)
                 self.tik_instance.h_duplicate(li_new_rec_vec_ub[i, :], src_scalar)
