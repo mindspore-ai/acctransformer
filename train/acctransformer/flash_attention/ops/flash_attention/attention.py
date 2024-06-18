@@ -378,7 +378,7 @@ class FlashAttention(metaclass=ABCMeta):
                                                        scope=UB, name="drop_mask_ub")
             self.tik_instance.data_move(dropout_mask_ub, self.drop_mask_gm[dropout_mask_gm_offset], 0,
                                         q_blk_height, kv_blk_height // 16, (self.N - kv_blk_height) // 16, 0)
-            dropout_mask_ub = dropout_mask_ub.reshape((kv_blk_height // self.N0, q_blk_height, self.N0))
+            dropout_mask_ub = dropout_mask_ub.reshape((kv_blk_h_aligned // self.N0, q_blk_h_aligned, self.N0))
             if precision_type == FP32:
                 dropout_mask_ub_fp32 = self.tik_instance.Tensor(FP32,
                                                                 (kv_blk_h_aligned // self.N0, q_blk_h_aligned, self.N0),
